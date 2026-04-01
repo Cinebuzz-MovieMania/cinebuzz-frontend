@@ -1,83 +1,15 @@
 import { useEffect, useState } from "react";
 import API from "../../services/api";
+import SeatLayout from "../../components/SeatLayout";
 
-const emptyForm = { movieId: "", screenId: "", startTime: "", endTime: "", price: "" };
+const emptyForm = { movieId: "", screenId: "", startTime: "", price: "" };
 
-function SeatLayout({ showtime, theatres, onClose }) {
-  const [screenInfo, setScreenInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const theatre = theatres.find((t) => t.name === showtime.theatreName);
-    if (!theatre) { setLoading(false); return; }
-
-    API.get(`/screens/theatre/${theatre.id}`)
-      .then((res) => {
-        const screens = res.data.data || [];
-        const screen = screens.find((s) => s.id === showtime.screenId);
-        if (screen) setScreenInfo(screen);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, [showtime, theatres]);
-
-  const rowLabel = (i) => String.fromCharCode(65 + i);
-
-  return (
-    <div className="form-overlay" onClick={onClose}>
-      <div className="seat-layout-card" onClick={(e) => e.stopPropagation()}>
-        <button className="seat-close-btn" onClick={onClose}>&times;</button>
-
-        <div className="seat-header">
-          <h2>{showtime.movieTitle}</h2>
-          <p>{showtime.theatreName} &middot; {showtime.screenName}</p>
-          <p className="seat-meta">
-            {new Date(showtime.startTime).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
-            {" "}&middot; &#8377;{showtime.price}
-          </p>
-        </div>
-
-        {loading ? (
-          <div className="loading">Loading seat layout...</div>
-        ) : !screenInfo ? (
-          <div className="empty">Could not load screen info.</div>
-        ) : (
-          <>
-            <div className="screen-indicator">
-              <div className="screen-bar" />
-              <span>SCREEN</span>
-            </div>
-
-            <div className="seat-grid-wrapper">
-              {Array.from({ length: screenInfo.totalRows }, (_, rowIdx) => (
-                <div key={rowIdx} className="seat-row">
-                  <span className="row-label">{rowLabel(rowIdx)}</span>
-                  <div className="seat-row-seats">
-                    {Array.from({ length: screenInfo.seatsPerRow }, (_, seatIdx) => (
-                      <div key={seatIdx} className="seat available" title={`${rowLabel(rowIdx)}${seatIdx + 1}`}>
-                        {seatIdx + 1}
-                      </div>
-                    ))}
-                  </div>
-                  <span className="row-label">{rowLabel(rowIdx)}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="seat-legend">
-              <div className="legend-item">
-                <div className="seat available legend-box" />
-                <span>Available</span>
-              </div>
-              <div className="legend-item">
-                <span className="seat-count">{screenInfo.totalSeats} total seats</span>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
+function formatEndPreview(startLocal, durationMinutes) {
+  if (!startLocal || durationMinutes == null) return null;
+  const d = new Date(startLocal);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setMinutes(d.getMinutes() + Number(durationMinutes));
+  return d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function AdminShowtimes() {
@@ -129,11 +61,13 @@ function AdminShowtimes() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const startIso = form.startTime && form.startTime.length === 16
+      ? `${form.startTime}:00`
+      : form.startTime;
     const payload = {
       movieId: Number(form.movieId),
       screenId: Number(form.screenId),
-      startTime: form.startTime + ":00",
-      endTime: form.endTime + ":00",
+      startTime: startIso,
       price: Number(form.price),
     };
 
@@ -151,6 +85,10 @@ function AdminShowtimes() {
   };
 
   const set = (field, value) => setForm({ ...form, [field]: value });
+
+  const selectedMovie = movies.find((m) => m.id === Number(form.movieId));
+  const startForPreview = form.startTime && form.startTime.length === 16 ? `${form.startTime}:00` : form.startTime;
+  const endPreview = formatEndPreview(startForPreview, selectedMovie?.durationMinutes);
 
   const formatDateTime = (dt) => {
     if (!dt) return "—";
@@ -253,11 +191,14 @@ function AdminShowtimes() {
               <div className="form-group">
                 <label>Start Time</label>
                 <input type="datetime-local" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} required />
+                <p className="form-hint">End time is set automatically from the movie length. A minimum 5-minute gap is required between shows on the same screen.</p>
               </div>
-              <div className="form-group">
-                <label>End Time</label>
-                <input type="datetime-local" value={form.endTime} onChange={(e) => set("endTime", e.target.value)} required />
-              </div>
+              {selectedMovie && form.startTime && endPreview && (
+                <div className="form-group computed-end-preview">
+                  <label>Computed end time</label>
+                  <p className="computed-end-value">{endPreview} ({selectedMovie.durationMinutes} min)</p>
+                </div>
+              )}
               <div className="form-group">
                 <label>Price (&#8377;)</label>
                 <input type="number" min="0" step="0.01" value={form.price} onChange={(e) => set("price", e.target.value)} required />

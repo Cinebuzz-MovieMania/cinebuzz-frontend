@@ -1,19 +1,34 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { useCity } from "../context/CityContext";
 
 function Navbar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { selectedCity, openCityPicker } = useCity();
   const isActive = (path) => location.pathname === path ? "active" : "";
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  const handleCityClick = () => {
+    openCityPicker();
+    navigate("/");
+  };
 
   return (
     <nav className="navbar">
       <Link to="/" className="brand">CineBuzz</Link>
       <Link to="/" className={isActive("/")}>Home</Link>
-      <Link to="/admin/cities" className={isActive("/admin/cities")}>Cities</Link>
-      <Link to="/admin/theatres" className={isActive("/admin/theatres")}>Theatres</Link>
-      <Link to="/admin/screens" className={isActive("/admin/screens")}>Screens</Link>
-      <Link to="/admin/movies" className={isActive("/admin/movies")}>Movies</Link>
-      <Link to="/admin/persons" className={isActive("/admin/persons")}>Persons</Link>
-      <Link to="/admin/showtimes" className={isActive("/admin/showtimes")}>Showtimes</Link>
+      <div className="navbar-spacer" />
+      <button className="navbar-city" onClick={handleCityClick}>
+        📍 {selectedCity ? selectedCity.name : "Select City"}
+      </button>
+      <span className="navbar-user">{user?.name}</span>
+      <button className="navbar-logout" onClick={handleLogout}>Logout</button>
     </nav>
   );
 }
