@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../../services/api";
+import { formatRuntimeMinutes } from "../../utils/formatRuntime";
 import SeatLayout from "../../components/SeatLayout";
 
 const emptyForm = { movieId: "", screenId: "", startTime: "", price: "" };
@@ -196,7 +197,7 @@ function AdminShowtimes() {
               {selectedMovie && form.startTime && endPreview && (
                 <div className="form-group computed-end-preview">
                   <label>Computed end time</label>
-                  <p className="computed-end-value">{endPreview} ({selectedMovie.durationMinutes} min)</p>
+                  <p className="computed-end-value">{endPreview} ({formatRuntimeMinutes(selectedMovie.durationMinutes)})</p>
                 </div>
               )}
               <div className="form-group">

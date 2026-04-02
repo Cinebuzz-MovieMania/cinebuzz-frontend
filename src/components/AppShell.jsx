@@ -10,7 +10,7 @@ function AppShell() {
     <div className="app-shell">
       {user && isAdmin() && <AdminSidebar />}
       <div className="app-main-column">
-        {user && <Navbar />}
+        <Navbar />
         <main className="app-content">
           <Outlet />
         </main>

@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import SeatLayout from "../components/SeatLayout";
 import { useCity } from "../context/CityContext";
+import { writeHomeReturnSnapshot } from "../utils/homeReturnSnapshot";
+import { formatRuntimeMinutes } from "../utils/formatRuntime";
 
 function getLocalDateKey(d) {
   const x = new Date(d);
@@ -24,6 +27,10 @@ function buildSevenDaysFromToday() {
 }
 
 function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const restoreHandledKeyRef = useRef(null);
+
   const [cities, setCities] = useState([]);
   const [theatres, setTheatres] = useState([]);
   const [movies, setMovies] = useState([]);
@@ -32,7 +39,14 @@ function Home() {
 
   const { selectedCity, showCityPicker, selectCity, openCityPicker } = useCity();
   const [citySearch, setCitySearch] = useState("");
-  const [selectedMovie, setSelectedMovie] = useState(null);
+
+  /** Movie user clicked (detail + booking); null = only grid */
+  const [focusMovie, setFocusMovie] = useState(null);
+  /** true = theatres / dates / showtimes; false with focusMovie = detail overlay */
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [castList, setCastList] = useState([]);
+  const [castLoading, setCastLoading] = useState(false);
+
   const [selectedDateKey, setSelectedDateKey] = useState(() => getLocalDateKey(new Date()));
   const [viewingShowtime, setViewingShowtime] = useState(null);
 
@@ -55,6 +69,58 @@ function Home() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!focusMovie?.id) {
+      setCastList([]);
+      return;
+    }
+    setCastLoading(true);
+    API.get(`/movies/${focusMovie.id}/cast`)
+      .then((res) => setCastList(res.data.data || []))
+      .catch(() => setCastList([]))
+      .finally(() => setCastLoading(false));
+  }, [focusMovie?.id]);
+
+  useEffect(() => {
+    writeHomeReturnSnapshot({
+      focusMovieId: focusMovie?.id ?? null,
+      bookingOpen,
+      selectedDateKey,
+      viewingShowtimeId: viewingShowtime?.id ?? null,
+    });
+  }, [focusMovie, bookingOpen, selectedDateKey, viewingShowtime]);
+
+  useEffect(() => {
+    const r = location.state?.restoreHome;
+    if (!r) {
+      restoreHandledKeyRef.current = null;
+      return;
+    }
+    if (!movies.length) return;
+    if (r.viewingShowtimeId != null && !showtimes.length) return;
+    const key = JSON.stringify(r);
+    if (restoreHandledKeyRef.current === key) return;
+
+    const movie = r.focusMovieId != null ? movies.find((m) => m.id === r.focusMovieId) : null;
+    if (r.focusMovieId != null && !movie) {
+      restoreHandledKeyRef.current = key;
+      navigate("/", { replace: true, state: {} });
+      return;
+    }
+
+    restoreHandledKeyRef.current = key;
+    setFocusMovie(movie ?? null);
+    setBookingOpen(!!r.bookingOpen && !!movie);
+    if (r.selectedDateKey) setSelectedDateKey(r.selectedDateKey);
+    if (r.viewingShowtimeId != null && showtimes.length) {
+      const st = showtimes.find((s) => s.id === r.viewingShowtimeId);
+      setViewingShowtime(st ?? null);
+    } else {
+      setViewingShowtime(null);
+    }
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, movies, showtimes, location.pathname, navigate]);
+
   const cityTheatreNames = selectedCity
     ? theatres.filter((t) => t.cityId === selectedCity.id).map((t) => t.name)
     : [];
@@ -63,13 +129,14 @@ function Home() {
   const cityMovieIds = [...new Set(cityShowtimes.map((s) => s.movieId))];
   const cityMovies = selectedCity ? movies.filter((m) => cityMovieIds.includes(m.id)) : movies;
 
-  const movieShowtimesForSelectedDate = selectedMovie
-    ? cityShowtimes.filter(
-        (s) =>
-          s.movieId === selectedMovie.id &&
-          getLocalDateKey(new Date(s.startTime)) === selectedDateKey
-      )
-    : [];
+  const movieShowtimesForSelectedDate =
+    bookingOpen && focusMovie
+      ? cityShowtimes.filter(
+          (s) =>
+            s.movieId === focusMovie.id &&
+            getLocalDateKey(new Date(s.startTime)) === selectedDateKey
+        )
+      : [];
 
   const movieShowtimesByTheatre = movieShowtimesForSelectedDate.reduce((acc, s) => {
     if (!acc[s.theatreName]) acc[s.theatreName] = [];
@@ -78,100 +145,131 @@ function Home() {
   }, {});
 
   Object.keys(movieShowtimesByTheatre).forEach((name) => {
-    movieShowtimesByTheatre[name].sort(
-      (a, b) => new Date(a.startTime) - new Date(b.startTime)
-    );
+    movieShowtimesByTheatre[name].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
   });
-
-  const formatTime = (dt) => {
-    if (!dt) return "";
-    return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
-  };
 
   const formatTimeOnly = (dt) => {
     if (!dt) return "";
     return new Date(dt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
   };
 
+  const actors = castList.filter((c) => c.role === "ACTOR");
+  const crew = castList.filter((c) => c.role !== "ACTOR");
+
+  const formatReleaseDate = (d) => {
+    if (!d) return "—";
+    try {
+      return new Date(d + (typeof d === "string" && d.length <= 10 ? "T12:00:00" : "")).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return String(d);
+    }
+  };
+
+  const formatCrewRole = (role) => (typeof role === "string" ? role.replace(/_/g, " ") : String(role));
+
   const handleCitySelect = (city) => {
     selectCity(city);
-    setSelectedMovie(null);
+    setFocusMovie(null);
+    setBookingOpen(false);
   };
 
-  const handleChangeCity = () => {
-    openCityPicker();
-    setSelectedMovie(null);
+  const openMovieCard = (movie) => {
+    if (showCityPicker) return;
+    setFocusMovie(movie);
+    setBookingOpen(false);
   };
 
-  const openMovie = (movie) => {
-    setSelectedMovie(movie);
+  const closeMovieDetail = () => {
+    setFocusMovie(null);
+    setBookingOpen(false);
+  };
+
+  const startBooking = () => {
+    setBookingOpen(true);
     setSelectedDateKey(getLocalDateKey(new Date()));
+  };
+
+  const backFromBooking = () => {
+    setBookingOpen(false);
   };
 
   if (loading) return <div className="loading">Loading...</div>;
 
-  // ── Step 3: Theatres & Showtimes for Selected Movie ───
-  if (selectedMovie) {
+  // ── Booking: dates + theatres (after Book tickets) ───
+  if (bookingOpen && focusMovie) {
     const theatreNames = Object.keys(movieShowtimesByTheatre).sort((a, b) => a.localeCompare(b));
 
     return (
       <div className="page">
         <div className="step-header">
-          <button className="back-btn" onClick={() => setSelectedMovie(null)}>&larr; Back to Movies</button>
+          <button type="button" className="back-btn" onClick={backFromBooking}>
+            &larr; Back to movie
+          </button>
         </div>
 
         <div className="selected-movie-banner">
           <div className="banner-poster">
-            {selectedMovie.posterUrl ? (
-              <img src={selectedMovie.posterUrl} alt={selectedMovie.title} />
+            {focusMovie.posterUrl ? (
+              <img src={focusMovie.posterUrl} alt={focusMovie.title} />
             ) : (
               <span className="poster-placeholder">🎬</span>
             )}
           </div>
           <div className="banner-info">
-            <h1>{selectedMovie.title}</h1>
-            <p className="banner-meta">{selectedMovie.genre} &middot; {selectedMovie.language} &middot; {selectedMovie.durationMinutes} min</p>
-            {selectedMovie.description && <p className="banner-desc">{selectedMovie.description}</p>}
-            {selectedCity && <p className="banner-city">📍 {selectedCity.name}, {selectedCity.state}</p>}
+            <h1>{focusMovie.title}</h1>
+            <p className="banner-meta">
+              {focusMovie.genre} &middot; {focusMovie.language} &middot; {formatRuntimeMinutes(focusMovie.durationMinutes)}
+            </p>
           </div>
           <div className="date-strip-wrap">
-          <p className="date-strip-label">Pick a date</p>
-          <div className="date-strip" role="tablist" aria-label="Show dates">
-            {sevenDays.map(({ date, key }) => {
-              const isToday = key === getLocalDateKey(new Date());
-              const isSelected = key === selectedDateKey;
-              const dayName = date.toLocaleDateString("en-IN", { weekday: "short" });
-              const dayNum = date.getDate();
-              const monthShort = date.toLocaleDateString("en-IN", { month: "short" });
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={isSelected}
-                  className={`date-chip ${isSelected ? "active" : ""} ${isToday ? "today" : ""}`}
-                  onClick={() => setSelectedDateKey(key)}
-                >
-                  <span className="date-chip-day">{dayName}</span>
-                  <span className="date-chip-num">{dayNum}</span>
-                  <span className="date-chip-month">{monthShort}</span>
-                  {isToday && <span className="date-chip-badge">Today</span>}
-                </button>
-              );
-            })}
-          </div>
+            <p className="date-strip-label">Pick a date</p>
+            <div className="date-strip" role="tablist" aria-label="Show dates">
+              {sevenDays.map(({ date, key }) => {
+                const isToday = key === getLocalDateKey(new Date());
+                const isSelected = key === selectedDateKey;
+                const dayName = date.toLocaleDateString("en-IN", { weekday: "short" });
+                const dayNum = date.getDate();
+                const monthShort = date.toLocaleDateString("en-IN", { month: "short" });
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    className={`date-chip ${isSelected ? "active" : ""} ${isToday ? "today" : ""}`}
+                    onClick={() => setSelectedDateKey(key)}
+                  >
+                    <span className="date-chip-day">{dayName}</span>
+                    <span className="date-chip-num">{dayNum}</span>
+                    <span className="date-chip-month">{monthShort}</span>
+                    {isToday && <span className="date-chip-badge">Today</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         <h2 className="shows-section-title">
-          Shows on {new Date(selectedDateKey + "T12:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+          Shows on{" "}
+          {new Date(selectedDateKey + "T12:00:00").toLocaleDateString("en-IN", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
           <span className="shows-theatre-count">
             {theatreNames.length} {theatreNames.length === 1 ? "theatre" : "theatres"}
           </span>
         </h2>
 
         {theatreNames.length === 0 ? (
-          <div className="empty date-empty">No shows for this movie on this date in {selectedCity?.name || "this city"}.</div>
+          <div className="empty date-empty">
+            No shows for this movie on this date.
+          </div>
         ) : (
           <div className="theatre-date-layout">
             {theatreNames.map((theatreName) => {
@@ -186,11 +284,13 @@ function Home() {
                         type="button"
                         className="showtime-mini-box"
                         onClick={() => setViewingShowtime(s)}
+                        aria-label={`${formatTimeOnly(s.startTime)}, ₹${s.price}, ${s.availableSeats} seats available`}
                       >
                         <span className="showtime-mini-time">{formatTimeOnly(s.startTime)}</span>
-                        <span className="showtime-mini-screen">{s.screenName}</span>
-                        <span className="showtime-mini-price">&#8377;{s.price}</span>
-                        <span className="showtime-mini-seats">{s.availableSeats} seats</span>
+                        <span className="showtime-mini-tooltip" aria-hidden="true">
+                          <span className="showtime-mini-price">&#8377;{s.price}</span>
+                          <span className="showtime-mini-seats">{s.availableSeats} seats</span>
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -211,31 +311,185 @@ function Home() {
     );
   }
 
-  // ── Movies Grid (always visible) + City Picker Overlay ───
-  return (
-    <div className="page">
-      <div className="page-header">
-        <h1>Now Showing</h1>
-        {selectedCity ? (
-          <button className="city-selected-btn" onClick={handleChangeCity}>
-            📍 {selectedCity.name} &middot; Change
+  // ── Full page: movie detail (before Book tickets) ───
+  if (focusMovie && !bookingOpen) {
+    const m = focusMovie;
+    return (
+      <div className="page movie-detail-fullpage">
+        <div className="movie-detail-topbar">
+          <button type="button" className="back-btn movie-detail-back" onClick={closeMovieDetail}>
+            &larr; Back to movies
           </button>
+        </div>
+
+        <section className="movie-detail-hero">
+          <div className="movie-detail-hero-poster">
+            {m.posterUrl ? (
+              <img src={m.posterUrl} alt={m.title} />
+            ) : (
+              <span className="poster-placeholder">🎬</span>
+            )}
+          </div>
+          <div className="movie-detail-hero-info">
+            <h1 className="movie-detail-title">{m.title}</h1>
+            <p className="movie-detail-genre">{m.genre} &middot; {m.language}</p>
+            <div className="movie-detail-facts">
+              <div className="movie-detail-fact">
+                <span className="movie-detail-fact-label">Release date</span>
+                <span className="movie-detail-fact-value">{formatReleaseDate(m.releaseDate)}</span>
+              </div>
+              <div className="movie-detail-fact">
+                <span className="movie-detail-fact-label">Runtime</span>
+                <span className="movie-detail-fact-value">{formatRuntimeMinutes(m.durationMinutes)}</span>
+              </div>
+            </div>
+            {m.description && <p className="movie-detail-about">{m.description}</p>}
+          </div>
+          <div className="movie-detail-book-wrap">
+            <button type="button" className="btn btn-primary movie-detail-book-cta" onClick={startBooking}>
+              Book tickets
+            </button>
+          </div>
+        </section>
+
+        {castLoading ? (
+          <p className="movie-detail-loading">Loading cast &amp; crew…</p>
         ) : (
-          <button className="city-selected-btn" onClick={() => openCityPicker()}>
-            📍 Select City
-          </button>
+          <>
+            {actors.length > 0 && (
+              <section className="movie-detail-section">
+                <h2 className="movie-detail-section-title">Cast</h2>
+                <div className="movie-detail-people-grid">
+                  {actors.map((a) => (
+                    <div key={a.id} className="movie-person-card">
+                      <div className="movie-person-photo">
+                        {a.profilePictureUrl ? (
+                          <img src={a.profilePictureUrl} alt={a.personName} />
+                        ) : (
+                          <span className="movie-person-placeholder">👤</span>
+                        )}
+                      </div>
+                      <p className="movie-person-name">{a.personName}</p>
+                      {a.characterName && (
+                        <p className="movie-person-sub">as {a.characterName}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {crew.length > 0 && (
+              <section className="movie-detail-section">
+                <h2 className="movie-detail-section-title">Crew</h2>
+                <div className="movie-detail-people-grid">
+                  {crew.map((c) => (
+                    <div key={c.id} className="movie-person-card">
+                      <div className="movie-person-photo">
+                        {c.profilePictureUrl ? (
+                          <img src={c.profilePictureUrl} alt={c.personName} />
+                        ) : (
+                          <span className="movie-person-placeholder">👤</span>
+                        )}
+                      </div>
+                      <p className="movie-person-name">{c.personName}</p>
+                      <p className="movie-person-sub">{formatCrewRole(c.role)}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {actors.length === 0 && crew.length === 0 && (
+              <p className="movie-detail-empty">Cast and crew not listed yet.</p>
+            )}
+          </>
+        )}
+
+        {showCityPicker && (
+          <div className="city-overlay">
+            <div className="city-overlay-card">
+              <h2>Select Your City</h2>
+              <p className="step-subtitle">Choose a city to see showtimes near you</p>
+              <input
+                className="city-search"
+                type="text"
+                placeholder="Search city..."
+                value={citySearch}
+                onChange={(e) => setCitySearch(e.target.value)}
+                autoFocus
+              />
+              <div className="city-overlay-grid">
+                {cities
+                  .filter(
+                    (c) =>
+                      c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
+                      c.state.toLowerCase().includes(citySearch.toLowerCase())
+                  )
+                  .map((city) => {
+                    const count = theatres.filter((t) => t.cityId === city.id).length;
+                    return (
+                      <div
+                        key={city.id}
+                        className={`city-pill ${selectedCity?.id === city.id ? "active" : ""}`}
+                        onClick={() => {
+                          handleCitySelect(city);
+                          setCitySearch("");
+                        }}
+                      >
+                        <span className="city-pill-icon">📍</span>
+                        <div>
+                          <strong>{city.name}</strong>
+                          <span className="city-pill-meta">
+                            {city.state} &middot; {count} {count === 1 ? "theatre" : "theatres"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {cities.filter(
+                  (c) =>
+                    c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
+                    c.state.toLowerCase().includes(citySearch.toLowerCase())
+                ).length === 0 && <div className="empty">No cities match &quot;{citySearch}&quot;</div>}
+              </div>
+            </div>
+          </div>
         )}
       </div>
+    );
+  }
 
-      <div className={showCityPicker ? "movies-bg blurred" : "movies-bg"}>
+  // ── Grid + city picker ───
+  return (
+    <div className="page home-page">
+      <div className="page-header">
+        <h1>Now Showing</h1>
+      </div>
+
+      <div className={showCityPicker ? "movies-bg blurred" : "movies-bg home-movies-fill"}>
         {cityMovies.length === 0 ? (
-          <div className="empty">{selectedCity ? `No movies showing in ${selectedCity.name}.` : "No movies available yet."}</div>
+          <div className="empty">
+            {selectedCity ? "No movies showing for your selection." : "No movies available yet."}
+          </div>
         ) : (
-          <div className="movie-grid">
+          <div className="movie-grid home-movie-grid">
             {cityMovies.map((movie) => {
               const count = selectedCity ? cityShowtimes.filter((s) => s.movieId === movie.id).length : 0;
               return (
-                <div key={movie.id} className="movie-card" onClick={() => { if (!showCityPicker) openMovie(movie); }}>
+                <div
+                  key={movie.id}
+                  className="movie-card"
+                  onClick={() => openMovieCard(movie)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openMovieCard(movie);
+                    }
+                  }}
+                >
                   <div className="poster">
                     {movie.posterUrl ? (
                       <img src={movie.posterUrl} alt={movie.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -245,10 +499,14 @@ function Home() {
                   </div>
                   <div className="info">
                     <h3>{movie.title}</h3>
-                    <p>{movie.genre} &middot; {movie.language}</p>
-                    <p>{movie.durationMinutes} min</p>
+                    <p>
+                      {movie.genre} &middot; {movie.language}
+                    </p>
+                    <p>{formatRuntimeMinutes(movie.durationMinutes)}</p>
                     {selectedCity && count > 0 && (
-                      <span className="movie-show-count">{count} {count === 1 ? "show" : "shows"}</span>
+                      <span className="movie-show-count">
+                        {count} {count === 1 ? "show" : "shows"}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -273,9 +531,10 @@ function Home() {
             />
             <div className="city-overlay-grid">
               {cities
-                .filter((c) =>
-                  c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
-                  c.state.toLowerCase().includes(citySearch.toLowerCase())
+                .filter(
+                  (c) =>
+                    c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
+                    c.state.toLowerCase().includes(citySearch.toLowerCase())
                 )
                 .map((city) => {
                   const count = theatres.filter((t) => t.cityId === city.id).length;
@@ -283,22 +542,26 @@ function Home() {
                     <div
                       key={city.id}
                       className={`city-pill ${selectedCity?.id === city.id ? "active" : ""}`}
-                      onClick={() => { handleCitySelect(city); setCitySearch(""); }}
+                      onClick={() => {
+                        handleCitySelect(city);
+                        setCitySearch("");
+                      }}
                     >
                       <span className="city-pill-icon">📍</span>
                       <div>
                         <strong>{city.name}</strong>
-                        <span className="city-pill-meta">{city.state} &middot; {count} {count === 1 ? "theatre" : "theatres"}</span>
+                        <span className="city-pill-meta">
+                          {city.state} &middot; {count} {count === 1 ? "theatre" : "theatres"}
+                        </span>
                       </div>
                     </div>
                   );
                 })}
-              {cities.filter((c) =>
-                c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
-                c.state.toLowerCase().includes(citySearch.toLowerCase())
-              ).length === 0 && (
-                <div className="empty">No cities match "{citySearch}"</div>
-              )}
+              {cities.filter(
+                (c) =>
+                  c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
+                  c.state.toLowerCase().includes(citySearch.toLowerCase())
+              ).length === 0 && <div className="empty">No cities match &quot;{citySearch}&quot;</div>}
             </div>
           </div>
         </div>

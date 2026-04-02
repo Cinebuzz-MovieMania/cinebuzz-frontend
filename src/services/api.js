@@ -25,18 +25,18 @@ function attachToken(config) {
   return config;
 }
 
+function onUnauthorized(err) {
+  if (err.response?.status === 401) {
+    localStorage.removeItem("cinebuzz_user");
+    window.location.href = "/";
+  }
+  return Promise.reject(err);
+}
+
 API.interceptors.request.use(attachToken);
 PublicAPI.interceptors.request.use(attachToken);
 
-API.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem("cinebuzz_user");
-      window.location.href = "/login";
-    }
-    return Promise.reject(err);
-  }
-);
+API.interceptors.response.use((res) => res, onUnauthorized);
+PublicAPI.interceptors.response.use((res) => res, onUnauthorized);
 
 export default API;

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import API from "../../services/api";
+import { formatRuntimeMinutes } from "../../utils/formatRuntime";
 
 const emptyForm = {
   title: "", description: "", genre: "", language: "",
@@ -94,7 +95,7 @@ function MovieDetail({ movie, persons, onMovieUpdate }) {
         </div>
         <div className="movie-detail-info">
           <h2>{movie.title}</h2>
-          <p className="movie-detail-meta">{movie.genre} &middot; {movie.language} &middot; {movie.durationMinutes} min</p>
+          <p className="movie-detail-meta">{movie.genre} &middot; {movie.language} &middot; {formatRuntimeMinutes(movie.durationMinutes)}</p>
           <p className="movie-detail-meta">Released: {movie.releaseDate}</p>
           {movie.description && <p className="movie-detail-desc">{movie.description}</p>}
         </div>
@@ -294,7 +295,7 @@ function AdminMovies() {
                 <div className="list-item-info">
                   <strong>{m.title}</strong>
                   <span className="list-item-meta">{m.genre} &middot; {m.language}</span>
-                  <span className="list-item-meta">{m.durationMinutes} min &middot; {m.releaseDate}</span>
+                  <span className="list-item-meta">{formatRuntimeMinutes(m.durationMinutes)} &middot; {m.releaseDate}</span>
                 </div>
                 <div className="list-item-actions">
                   <button className="btn btn-sm btn-primary" onClick={(e) => openEdit(m, e)}>Edit</button>
