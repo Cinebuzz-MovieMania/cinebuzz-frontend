@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import API from "../services/api";
+import API, { PublicAPI } from "../services/api";
 import SeatLayout from "../components/SeatLayout";
 import { useCity } from "../context/CityContext";
 import { writeHomeReturnSnapshot } from "../utils/homeReturnSnapshot";
@@ -33,16 +33,14 @@ function Home() {
 
   const [cities, setCities] = useState([]);
   const [theatres, setTheatres] = useState([]);
-  const [movies, setMovies] = useState([]);
-  const [showtimes, setShowtimes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [browseRows, setBrowseRows] = useState([]);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const { selectedCity, showCityPicker, selectCity, openCityPicker } = useCity();
   const [citySearch, setCitySearch] = useState("");
 
-  /** Movie user clicked (detail + booking); null = only grid */
   const [focusMovie, setFocusMovie] = useState(null);
-  /** true = theatres / dates / showtimes; false with focusMovie = detail overlay */
   const [bookingOpen, setBookingOpen] = useState(false);
   const [castList, setCastList] = useState([]);
   const [castLoading, setCastLoading] = useState(false);
@@ -50,24 +48,43 @@ function Home() {
   const [selectedDateKey, setSelectedDateKey] = useState(() => getLocalDateKey(new Date()));
   const [viewingShowtime, setViewingShowtime] = useState(null);
 
+  const [movieDayShowtimes, setMovieDayShowtimes] = useState([]);
+  const [movieDayLoading, setMovieDayLoading] = useState(false);
+
   const sevenDays = buildSevenDaysFromToday();
 
   useEffect(() => {
-    Promise.all([
-      API.get("/cities"),
-      API.get("/theatres"),
-      API.get("/movies"),
-      API.get("/showtimes"),
-    ])
-      .then(([citiesRes, theatresRes, moviesRes, showtimesRes]) => {
+    Promise.all([API.get("/cities"), API.get("/theatres")])
+      .then(([citiesRes, theatresRes]) => {
         setCities(citiesRes.data.data || []);
         setTheatres(theatresRes.data.data || []);
-        setMovies(moviesRes.data.data || []);
-        setShowtimes(showtimesRes.data.data || []);
       })
       .catch((err) => console.error("Error loading data", err))
-      .finally(() => setLoading(false));
+      .finally(() => setInitialLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedCity?.id) {
+      setBrowseRows([]);
+      return;
+    }
+    let cancelled = false;
+    setBrowseLoading(true);
+    PublicAPI.get("/browse/movies", { params: { cityId: selectedCity.id } })
+      .then((res) => {
+        if (!cancelled) setBrowseRows(res.data.data || []);
+      })
+      .catch((err) => {
+        console.error("Browse movies", err);
+        if (!cancelled) setBrowseRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setBrowseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCity?.id]);
 
   useEffect(() => {
     if (!focusMovie?.id) {
@@ -91,54 +108,79 @@ function Home() {
   }, [focusMovie, bookingOpen, selectedDateKey, viewingShowtime]);
 
   useEffect(() => {
+    if (!bookingOpen || !focusMovie?.id || !selectedCity?.id || !selectedDateKey) {
+      setMovieDayShowtimes([]);
+      return;
+    }
+    let cancelled = false;
+    setMovieDayLoading(true);
+    PublicAPI.get("/browse/showtimes", {
+      params: {
+        cityId: selectedCity.id,
+        movieId: focusMovie.id,
+        date: selectedDateKey,
+      },
+    })
+      .then((res) => {
+        if (!cancelled) setMovieDayShowtimes(res.data.data || []);
+      })
+      .catch((err) => {
+        console.error("Browse showtimes", err);
+        if (!cancelled) setMovieDayShowtimes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMovieDayLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingOpen, focusMovie?.id, selectedCity?.id, selectedDateKey]);
+
+  useEffect(() => {
     const r = location.state?.restoreHome;
     if (!r) {
       restoreHandledKeyRef.current = null;
       return;
     }
-    if (!movies.length) return;
-    if (r.viewingShowtimeId != null && !showtimes.length) return;
     const key = JSON.stringify(r);
     if (restoreHandledKeyRef.current === key) return;
 
-    const movie = r.focusMovieId != null ? movies.find((m) => m.id === r.focusMovieId) : null;
-    if (r.focusMovieId != null && !movie) {
-      restoreHandledKeyRef.current = key;
-      navigate("/", { replace: true, state: {} });
-      return;
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        if (r.focusMovieId != null) {
+          const movieRes = await API.get(`/movies/${r.focusMovieId}`);
+          if (cancelled) return;
+          const movie = movieRes.data.data;
+          if (!movie) {
+            restoreHandledKeyRef.current = key;
+            navigate("/", { replace: true, state: {} });
+            return;
+          }
+          setFocusMovie(movie);
+          setBookingOpen(!!r.bookingOpen);
+          if (r.selectedDateKey) setSelectedDateKey(r.selectedDateKey);
+        }
+        if (r.viewingShowtimeId != null) {
+          const stRes = await PublicAPI.get(`/browse/showtimes/${r.viewingShowtimeId}`);
+          if (cancelled) return;
+          setViewingShowtime(stRes.data.data ?? null);
+        } else {
+          setViewingShowtime(null);
+        }
+        restoreHandledKeyRef.current = key;
+        navigate(location.pathname, { replace: true, state: {} });
+      } catch {
+        restoreHandledKeyRef.current = key;
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.state, location.pathname, navigate]);
 
-    restoreHandledKeyRef.current = key;
-    setFocusMovie(movie ?? null);
-    setBookingOpen(!!r.bookingOpen && !!movie);
-    if (r.selectedDateKey) setSelectedDateKey(r.selectedDateKey);
-    if (r.viewingShowtimeId != null && showtimes.length) {
-      const st = showtimes.find((s) => s.id === r.viewingShowtimeId);
-      setViewingShowtime(st ?? null);
-    } else {
-      setViewingShowtime(null);
-    }
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state, movies, showtimes, location.pathname, navigate]);
-
-  const cityTheatreNames = selectedCity
-    ? theatres.filter((t) => t.cityId === selectedCity.id).map((t) => t.name)
-    : [];
-
-  const cityShowtimes = showtimes.filter((s) => cityTheatreNames.includes(s.theatreName));
-  const cityMovieIds = [...new Set(cityShowtimes.map((s) => s.movieId))];
-  const cityMovies = selectedCity ? movies.filter((m) => cityMovieIds.includes(m.id)) : movies;
-
-  const movieShowtimesForSelectedDate =
-    bookingOpen && focusMovie
-      ? cityShowtimes.filter(
-          (s) =>
-            s.movieId === focusMovie.id &&
-            getLocalDateKey(new Date(s.startTime)) === selectedDateKey
-        )
-      : [];
-
-  const movieShowtimesByTheatre = movieShowtimesForSelectedDate.reduce((acc, s) => {
+  const movieShowtimesByTheatre = movieDayShowtimes.reduce((acc, s) => {
     if (!acc[s.theatreName]) acc[s.theatreName] = [];
     acc[s.theatreName].push(s);
     return acc;
@@ -197,9 +239,8 @@ function Home() {
     setBookingOpen(false);
   };
 
-  if (loading) return <div className="loading">Loading...</div>;
+  if (initialLoading) return <div className="loading">Loading...</div>;
 
-  // ── Booking: dates + theatres (after Book tickets) ───
   if (bookingOpen && focusMovie) {
     const theatreNames = Object.keys(movieShowtimesByTheatre).sort((a, b) => a.localeCompare(b));
 
@@ -266,7 +307,9 @@ function Home() {
           </span>
         </h2>
 
-        {theatreNames.length === 0 ? (
+        {movieDayLoading ? (
+          <div className="loading">Loading showtimes…</div>
+        ) : theatreNames.length === 0 ? (
           <div className="empty date-empty">
             No shows for this movie on this date.
           </div>
@@ -303,7 +346,6 @@ function Home() {
         {viewingShowtime && (
           <SeatLayout
             showtime={viewingShowtime}
-            theatres={theatres}
             onClose={() => setViewingShowtime(null)}
           />
         )}
@@ -311,7 +353,6 @@ function Home() {
     );
   }
 
-  // ── Full page: movie detail (before Book tickets) ───
   if (focusMovie && !bookingOpen) {
     const m = focusMovie;
     return (
@@ -460,7 +501,6 @@ function Home() {
     );
   }
 
-  // ── Grid + city picker ───
   return (
     <div className="page home-page">
       <div className="page-header">
@@ -468,14 +508,19 @@ function Home() {
       </div>
 
       <div className={showCityPicker ? "movies-bg blurred" : "movies-bg home-movies-fill"}>
-        {cityMovies.length === 0 ? (
+        {browseLoading ? (
+          <div className="loading">Loading movies…</div>
+        ) : selectedCity && browseRows.length === 0 ? (
           <div className="empty">
-            {selectedCity ? "No movies showing for your selection." : "No movies available yet."}
+            No movies showing for your selection.
           </div>
+        ) : !selectedCity ? (
+          <div className="empty">No movies available yet.</div>
         ) : (
           <div className="movie-grid home-movie-grid">
-            {cityMovies.map((movie) => {
-              const count = selectedCity ? cityShowtimes.filter((s) => s.movieId === movie.id).length : 0;
+            {browseRows.map((row) => {
+              const movie = row.movie;
+              const count = row.showtimeCount ?? 0;
               return (
                 <div
                   key={movie.id}

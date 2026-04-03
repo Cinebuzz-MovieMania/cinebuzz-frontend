@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { PublicAPI } from "../services/api";
 
 function formatWhen(iso) {
@@ -12,12 +13,29 @@ function formatWhen(iso) {
 }
 
 function MyBookings() {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  /** Auth payload uses `userId` (API); re-fetch whenever account identity or token changes. */
+  const accountKey = user
+    ? `${user.userId ?? user.id ?? ""}:${user.email ?? ""}:${user.token ?? ""}`
+    : "";
+
   useEffect(() => {
+    if (!user) {
+      setBookings([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setBookings([]);
+
     PublicAPI.get("/bookings")
       .then((res) => {
         if (!cancelled) setBookings(res.data.data || []);
@@ -31,7 +49,7 @@ function MyBookings() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [accountKey]);
 
   if (loading) {
     return (
@@ -91,12 +109,6 @@ function MyBookings() {
                 <div>
                   <dt>Ticket subtotal</dt>
                   <dd>&#8377;{Number(b.ticketSubtotal).toFixed(0)}</dd>
-                </div>
-              )}
-              {b.convenienceFee != null && Number(b.convenienceFee) > 0 && (
-                <div>
-                  <dt>Convenience fee</dt>
-                  <dd>&#8377;{Number(b.convenienceFee).toFixed(0)}</dd>
                 </div>
               )}
               <div>

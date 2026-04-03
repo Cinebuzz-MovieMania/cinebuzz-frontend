@@ -12,6 +12,7 @@ import AdminPersons from "./pages/admin/AdminPersons";
 import AdminShowtimes from "./pages/admin/AdminShowtimes";
 import BookingCheckout from "./pages/BookingCheckout";
 import BookingConfirmation from "./pages/BookingConfirmation";
+import BookingSeatUnavailable from "./pages/BookingSeatUnavailable";
 import MyBookings from "./pages/MyBookings";
 
 function App() {
@@ -26,6 +27,14 @@ function App() {
           element={
             <ProtectedRoute>
               <BookingCheckout />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/booking/seats-unavailable"
+          element={
+            <ProtectedRoute>
+              <BookingSeatUnavailable />
             </ProtectedRoute>
           }
         />

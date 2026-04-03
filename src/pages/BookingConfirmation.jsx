@@ -57,12 +57,6 @@ function BookingConfirmation() {
               <dd>&#8377;{Number(booking.ticketSubtotal).toFixed(0)}</dd>
             </div>
           )}
-          {booking.convenienceFee != null && Number(booking.convenienceFee) > 0 && (
-            <div>
-              <dt>Convenience fee</dt>
-              <dd>&#8377;{Number(booking.convenienceFee).toFixed(0)}</dd>
-            </div>
-          )}
           <div>
             <dt>Total paid</dt>
             <dd className="booking-amount">&#8377;{Number(booking.totalAmount).toFixed(0)}</dd>

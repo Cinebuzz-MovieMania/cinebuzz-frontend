@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { PublicAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { readHomeReturnSnapshot } from "../utils/homeReturnSnapshot";
-import { writeBookingCheckoutDraft } from "../utils/bookingCheckoutDraft";
+import {
+  clearBookingCheckoutDraft,
+  writeBookingCheckoutDraft,
+} from "../utils/bookingCheckoutDraft";
 import {
   clearPendingSeatSelection,
   readPendingSeatSelection,
@@ -49,8 +52,7 @@ function SeatLayout({ showtime, onClose = () => {} }) {
   const [seatMap, setSeatMap] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [holdError, setHoldError] = useState("");
-  const [holdLoading, setHoldLoading] = useState(false);
+  const [payNavigating, setPayNavigating] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const prevSelectionSize = useRef(0);
 
@@ -61,16 +63,25 @@ function SeatLayout({ showtime, onClose = () => {} }) {
       .then((seatsRes) => {
         const data = seatsRes.data.data;
         setSeatMap(data);
+        if (!data?.seats?.length) return;
+        const available = new Set(
+          data.seats.filter((s) => s.status === "AVAILABLE").map((s) => s.showtimeSeatId)
+        );
         const pending = readPendingSeatSelection(showtime.id);
-        if (pending?.length && data?.seats?.length) {
-          const available = new Set(
-            data.seats.filter((s) => s.status === "AVAILABLE").map((s) => s.showtimeSeatId)
-          );
+        if (pending?.length) {
           const next = new Set();
           for (const id of pending) {
             if (available.has(id)) next.add(id);
           }
-          if (next.size > 0) setSelectedIds(next);
+          setSelectedIds(next);
+        } else {
+          setSelectedIds((prev) => {
+            const next = new Set();
+            for (const id of prev) {
+              if (available.has(id)) next.add(id);
+            }
+            return next;
+          });
         }
       })
       .catch((err) => {
@@ -116,9 +127,18 @@ function SeatLayout({ showtime, onClose = () => {} }) {
     });
   };
 
+  const goToSeatUnavailable = (message) => {
+    clearBookingCheckoutDraft();
+    clearPendingSeatSelection();
+    onClose();
+    navigate("/booking/seats-unavailable", {
+      replace: true,
+      state: { message },
+    });
+  };
+
   const handlePay = async () => {
     if (selectedIds.size < 1) return;
-    setHoldError("");
     writePendingSeatSelection(showtime.id, [...selectedIds]);
     const draft = {
       showtime,
@@ -137,18 +157,30 @@ function SeatLayout({ showtime, onClose = () => {} }) {
       });
       return;
     }
-    setHoldLoading(true);
+    setPayNavigating(true);
     try {
-      await PublicAPI.post("/bookings/seat-hold", {
-        showtimeSeatIds: [...selectedIds],
-      });
+      const seatsRes = await PublicAPI.get(`/showtimes/${showtime.id}/seats`);
+      const mapData = seatsRes.data.data;
+      const seats = mapData?.seats ?? [];
+      const available = new Set(
+        seats.filter((s) => s.status === "AVAILABLE").map((s) => s.showtimeSeatId)
+      );
+      const chosen = [...selectedIds];
+      const blocked = chosen.filter((id) => !available.has(id));
+      if (blocked.length > 0) {
+        goToSeatUnavailable("Sorry! These seats are no more available.");
+        return;
+      }
+
       onClose();
       navigate("/booking/checkout", { state: draft });
     } catch (err) {
-      setHoldError(err.response?.data?.message || "Could not reserve seats. Try again.");
-      loadMap();
+      goToSeatUnavailable(
+        err.response?.data?.message
+          || "Sorry! These seats are no more available."
+      );
     } finally {
-      setHoldLoading(false);
+      setPayNavigating(false);
     }
   };
 
@@ -243,15 +275,14 @@ function SeatLayout({ showtime, onClose = () => {} }) {
 
         {selectedIds.size > 0 && (
           <div className="seat-footer">
-            {holdError && <p className="seat-hold-error">{holdError}</p>}
             <div className="seat-footer-actions">
               <button
                 type="button"
                 className="btn btn-primary seat-pay-btn"
                 onClick={handlePay}
-                disabled={holdLoading}
+                disabled={payNavigating}
               >
-                {holdLoading ? "Reserving…" : (
+                {payNavigating ? "Continue…" : (
                   <>
                     Pay &#8377;{ticketSubtotal.toFixed(0)}
                   </>
