@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { PublicAPI } from "../services/api";
 import {
   clearBookingCheckoutDraft,
@@ -33,6 +33,7 @@ function BookingCheckout() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [holdReady, setHoldReady] = useState(false);
 
   const draft = useMemo(() => {
     const fromState = location.state;
@@ -46,6 +47,34 @@ function BookingCheckout() {
 
   const seatCount = ids?.length ?? 0;
   const total = roundMoney(seatCount * unitPrice);
+
+  const idsKey = useMemo(() => (ids?.length ? ids.join(",") : ""), [ids]);
+
+  useEffect(() => {
+    if (!ids?.length) return;
+    let cancelled = false;
+    setHoldReady(false);
+    setError("");
+    (async () => {
+      try {
+        await PublicAPI.post("/bookings/hold", { showtimeSeatIds: ids });
+        if (!cancelled) setHoldReady(true);
+      } catch (err) {
+        const msg =
+          err.response?.data?.message
+          || err.message
+          || "Sorry! These seats are no more available.";
+        clearBookingCheckoutDraft();
+        clearPendingSeatSelection();
+        if (!cancelled) {
+          navigate("/booking/seats-unavailable", { replace: true, state: { message: msg } });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [idsKey, ids, navigate]);
 
   if (!draft || !showtime || !ids?.length || Number.isNaN(unitPrice)) {
     return <Navigate to="/" replace />;
@@ -108,6 +137,10 @@ function BookingCheckout() {
           </dl>
         </section>
 
+        {!holdReady && (
+          <p className="booking-checkout-hold-status">Securing your seats…</p>
+        )}
+
         {error && <p className="booking-checkout-error">{error}</p>}
 
         <div className="booking-checkout-actions">
@@ -115,7 +148,7 @@ function BookingCheckout() {
             type="button"
             className="btn btn-primary booking-checkout-continue"
             onClick={handleContinue}
-            disabled={submitting}
+            disabled={submitting || !holdReady}
           >
             {submitting ? "Processing…" : "Confirm booking"}
           </button>

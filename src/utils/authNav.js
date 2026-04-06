@@ -10,7 +10,7 @@ export function getReturnPathFromAuthState(from) {
 
 export function isAuthRoutePath(path) {
   const base = path.split("?")[0].split("#")[0];
-  return base === "/login" || base === "/register";
+  return base === "/login" || base === "/register" || base === "/forgot-password";
 }
 
 /** After closing login/register: go back to `from`, and re-apply Home UI via `home` when returning to `/`. */

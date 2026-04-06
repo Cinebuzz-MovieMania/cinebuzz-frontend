@@ -13,6 +13,9 @@ import {
   writePendingSeatSelection,
 } from "../utils/pendingSeatSelection";
 
+/** Load per-showtime availability (ShowtimeSeat rows + status); not static screen Seat ids. */
+const showtimeSeatMapPath = (showtimeId) => `/showtimes/${showtimeId}/showtime-seats`;
+
 const MAX_SEATS = 10;
 
 function roundMoney(n) {
@@ -56,16 +59,35 @@ function SeatLayout({ showtime, onClose = () => {} }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const prevSelectionSize = useRef(0);
 
+  const uid = user?.userId ?? user?.id;
+
+  const isSelectableSeat = useCallback(
+    (item) => {
+      if (!item) return false;
+      if (item.status === "AVAILABLE") return true;
+      if (
+        item.status === "LOCKED" &&
+        uid != null &&
+        item.lockedByUserId != null &&
+        Number(item.lockedByUserId) === Number(uid)
+      ) {
+        return true;
+      }
+      return false;
+    },
+    [uid]
+  );
+
   const loadMap = useCallback(() => {
     setLoading(true);
     setError("");
-    PublicAPI.get(`/showtimes/${showtime.id}/seats`)
+    PublicAPI.get(showtimeSeatMapPath(showtime.id))
       .then((seatsRes) => {
         const data = seatsRes.data.data;
         setSeatMap(data);
         if (!data?.seats?.length) return;
         const available = new Set(
-          data.seats.filter((s) => s.status === "AVAILABLE").map((s) => s.showtimeSeatId)
+          data.seats.filter((s) => isSelectableSeat(s)).map((s) => s.showtimeSeatId)
         );
         const pending = readPendingSeatSelection(showtime.id);
         if (pending?.length) {
@@ -89,7 +111,7 @@ function SeatLayout({ showtime, onClose = () => {} }) {
         setSeatMap(null);
       })
       .finally(() => setLoading(false));
-  }, [showtime.id]);
+  }, [showtime.id, isSelectableSeat]);
 
   useEffect(() => {
     loadMap();
@@ -114,7 +136,7 @@ function SeatLayout({ showtime, onClose = () => {} }) {
   const ticketSubtotal = roundMoney(seatCount * price);
 
   const toggleSeat = (item) => {
-    if (item.status !== "AVAILABLE") return;
+    if (!isSelectableSeat(item)) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(item.showtimeSeatId)) {
@@ -159,18 +181,20 @@ function SeatLayout({ showtime, onClose = () => {} }) {
     }
     setPayNavigating(true);
     try {
-      const seatsRes = await PublicAPI.get(`/showtimes/${showtime.id}/seats`);
+      const seatsRes = await PublicAPI.get(showtimeSeatMapPath(showtime.id));
       const mapData = seatsRes.data.data;
       const seats = mapData?.seats ?? [];
-      const available = new Set(
-        seats.filter((s) => s.status === "AVAILABLE").map((s) => s.showtimeSeatId)
-      );
       const chosen = [...selectedIds];
-      const blocked = chosen.filter((id) => !available.has(id));
+      const blocked = chosen.filter((id) => {
+        const row = seats.find((s) => s.showtimeSeatId === id);
+        return !row || !isSelectableSeat(row);
+      });
       if (blocked.length > 0) {
         goToSeatUnavailable("Sorry! These seats are no more available.");
         return;
       }
+
+      await PublicAPI.post("/bookings/hold", { showtimeSeatIds: chosen });
 
       onClose();
       navigate("/booking/checkout", { state: draft });
@@ -185,6 +209,15 @@ function SeatLayout({ showtime, onClose = () => {} }) {
   };
 
   const seatClass = (item) => {
+    const mine =
+      uid != null &&
+      item.lockedByUserId != null &&
+      Number(item.lockedByUserId) === Number(uid);
+    if (item.status === "LOCKED" && !mine) return "seat locked";
+    if (item.status === "BOOKED") return "seat unavailable";
+    if (item.status === "LOCKED" && mine) {
+      return selectedIds.has(item.showtimeSeatId) ? "seat selected" : "seat available";
+    }
     if (item.status !== "AVAILABLE") return "seat unavailable";
     if (selectedIds.has(item.showtimeSeatId)) return "seat selected";
     return "seat available";
@@ -235,7 +268,7 @@ function SeatLayout({ showtime, onClose = () => {} }) {
                     key={item.showtimeSeatId}
                     type="button"
                     className={seatClass(item)}
-                    disabled={item.status !== "AVAILABLE"}
+                    disabled={!isSelectableSeat(item)}
                     onClick={() => toggleSeat(item)}
                     title={`${item.seatLabel} — ${item.status}`}
                   >
@@ -266,8 +299,12 @@ function SeatLayout({ showtime, onClose = () => {} }) {
                 <span>Selected</span>
               </div>
               <div className="legend-item">
+                <span className="seat locked legend-box" />
+                <span>Locked</span>
+              </div>
+              <div className="legend-item">
                 <span className="seat unavailable legend-box" />
-                <span>Taken</span>
+                <span>Booked</span>
               </div>
             </div>
           </>

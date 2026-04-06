@@ -79,6 +79,19 @@ function Login() {
               required
             />
           </div>
+          <div className="login-forgot-wrap">
+            <Link
+              to="/forgot-password"
+              className="login-forgot-link"
+              state={{
+                from: location.state?.from,
+                home: location.state?.home,
+                reason: location.state?.reason,
+              }}
+            >
+              Forgot password?
+            </Link>
+          </div>
           <button type="submit" className="btn btn-primary login-btn" disabled={loading}>
             {loading ? "Signing in..." : "Sign In"}
           </button>
