@@ -15,13 +15,19 @@ export function CityProvider({ children }) {
     setShowCityPicker(true);
   };
 
+  const closeCityPicker = () => {
+    setShowCityPicker(false);
+  };
+
   const clearCity = () => {
     setSelectedCity(null);
     setShowCityPicker(true);
   };
 
   return (
-    <CityContext.Provider value={{ selectedCity, showCityPicker, selectCity, openCityPicker, clearCity }}>
+    <CityContext.Provider
+      value={{ selectedCity, showCityPicker, selectCity, openCityPicker, closeCityPicker, clearCity }}
+    >
       {children}
     </CityContext.Provider>
   );

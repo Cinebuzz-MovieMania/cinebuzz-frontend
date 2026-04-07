@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { AuthBackButton } from "../components/AuthBackButton";
 import { AuthAPI } from "../services/api";
 import { navigateAfterClosingAuthPanel } from "../utils/authNav";
 
@@ -214,27 +215,24 @@ function Register() {
     setError("");
   };
 
+  const handleAuthBack = () => {
+    if (step === "otp") {
+      goBackToEmail();
+    } else {
+      handleClose();
+    }
+  };
+
   return (
     <div className="login-page">
       <div className={`login-card${step === "otp" ? " login-card--otp-verify" : ""}`}>
-        <button type="button" className="login-card-close" onClick={handleClose} aria-label="Close">
-          ×
-        </button>
+        <AuthBackButton
+          onClick={handleAuthBack}
+          ariaLabel={step === "otp" ? "Back to email" : "Back"}
+        />
 
         {step === "otp" ? (
           <>
-            <button type="button" className="register-otp-back" onClick={goBackToEmail} aria-label="Back">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
-                <path
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 6l-6 6 6 6"
-                />
-              </svg>
-            </button>
             <h2 className="register-otp-title">Verify your Email Address</h2>
             <p className="register-otp-instruction">
               Enter OTP sent to <strong className="register-otp-email">{email.trim() || "your email"}</strong>

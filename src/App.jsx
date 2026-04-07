@@ -15,6 +15,7 @@ import BookingCheckout from "./pages/BookingCheckout";
 import BookingConfirmation from "./pages/BookingConfirmation";
 import BookingSeatUnavailable from "./pages/BookingSeatUnavailable";
 import MyBookings from "./pages/MyBookings";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
@@ -53,6 +54,14 @@ function App() {
           element={
             <ProtectedRoute>
               <MyBookings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
             </ProtectedRoute>
           }
         />

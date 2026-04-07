@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { AuthBackButton } from "../components/AuthBackButton";
 import { AuthAPI } from "../services/api";
 import { navigateAfterClosingAuthPanel } from "../utils/authNav";
 
@@ -22,6 +23,23 @@ function ForgotPassword() {
 
   const handleClose = () => {
     navigateAfterClosingAuthPanel(navigate, location.state);
+  };
+
+  const goBackToEmailStep = () => {
+    setStep("email");
+    setCode("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setError("");
+    setRequestMessage("");
+  };
+
+  const handleAuthBack = () => {
+    if (step === "reset") {
+      goBackToEmailStep();
+    } else {
+      handleClose();
+    }
   };
 
   useEffect(() => {
@@ -120,9 +138,7 @@ function ForgotPassword() {
     return (
       <div className="login-page">
         <div className="login-card">
-          <button type="button" className="login-card-close" onClick={handleClose} aria-label="Close">
-            ×
-          </button>
+          <AuthBackButton onClick={handleClose} ariaLabel="Back" />
           <div className="login-brand">CineBuzz</div>
           <h2>Password updated</h2>
           <p className="login-subtitle">You can sign in with your new password.</p>
@@ -146,9 +162,10 @@ function ForgotPassword() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <button type="button" className="login-card-close" onClick={handleClose} aria-label="Close">
-          ×
-        </button>
+        <AuthBackButton
+          onClick={handleAuthBack}
+          ariaLabel={step === "reset" ? "Back to email" : "Back"}
+        />
         <div className="login-brand">CineBuzz</div>
         <h2>Reset password</h2>
         <p className="login-subtitle">

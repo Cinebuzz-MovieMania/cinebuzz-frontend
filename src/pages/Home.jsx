@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API, { PublicAPI } from "../services/api";
 import SeatLayout from "../components/SeatLayout";
+import { AuthBackButton } from "../components/AuthBackButton";
 import { useCity } from "../context/CityContext";
 import { writeHomeReturnSnapshot } from "../utils/homeReturnSnapshot";
 import { formatRuntimeMinutes } from "../utils/formatRuntime";
@@ -32,18 +33,19 @@ function Home() {
   const restoreHandledKeyRef = useRef(null);
 
   const [cities, setCities] = useState([]);
-  const [theatres, setTheatres] = useState([]);
   const [browseRows, setBrowseRows] = useState([]);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  const { selectedCity, showCityPicker, selectCity, openCityPicker } = useCity();
+  const { selectedCity, showCityPicker, selectCity, openCityPicker, closeCityPicker } = useCity();
   const [citySearch, setCitySearch] = useState("");
 
   const [focusMovie, setFocusMovie] = useState(null);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [castList, setCastList] = useState([]);
   const [castLoading, setCastLoading] = useState(false);
+  /** { loading, error, person, subtitle } | null */
+  const [personModal, setPersonModal] = useState(null);
 
   const [selectedDateKey, setSelectedDateKey] = useState(() => getLocalDateKey(new Date()));
   const [viewingShowtime, setViewingShowtime] = useState(null);
@@ -54,10 +56,9 @@ function Home() {
   const sevenDays = buildSevenDaysFromToday();
 
   useEffect(() => {
-    Promise.all([API.get("/cities"), API.get("/theatres")])
-      .then(([citiesRes, theatresRes]) => {
+    API.get("/cities")
+      .then((citiesRes) => {
         setCities(citiesRes.data.data || []);
-        setTheatres(theatresRes.data.data || []);
       })
       .catch((err) => console.error("Error loading data", err))
       .finally(() => setInitialLoading(false));
@@ -92,7 +93,7 @@ function Home() {
       return;
     }
     setCastLoading(true);
-    API.get(`/movies/${focusMovie.id}/cast`)
+    PublicAPI.get(`/admin/movies/${focusMovie.id}/cast`)
       .then((res) => setCastList(res.data.data || []))
       .catch(() => setCastList([]))
       .finally(() => setCastLoading(false));
@@ -213,6 +214,15 @@ function Home() {
 
   const formatCrewRole = (role) => (typeof role === "string" ? role.replace(/_/g, " ") : String(role));
 
+  useEffect(() => {
+    if (!personModal) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setPersonModal(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [personModal]);
+
   const handleCitySelect = (city) => {
     selectCity(city);
     setFocusMovie(null);
@@ -228,6 +238,29 @@ function Home() {
   const closeMovieDetail = () => {
     setFocusMovie(null);
     setBookingOpen(false);
+    setPersonModal(null);
+  };
+
+  const closePersonDetail = () => setPersonModal(null);
+
+  const openPersonDetail = (personId, subtitle) => {
+    setPersonModal({ loading: true, error: null, person: null, subtitle: subtitle || "" });
+    PublicAPI.get(`/browse/persons/${personId}`)
+      .then((res) => {
+        setPersonModal((prev) => ({
+          ...prev,
+          loading: false,
+          person: res.data.data,
+          error: null,
+        }));
+      })
+      .catch((err) => {
+        setPersonModal((prev) => ({
+          ...prev,
+          loading: false,
+          error: err.response?.data?.message || "Could not load profile.",
+        }));
+      });
   };
 
   const startBooking = () => {
@@ -402,7 +435,17 @@ function Home() {
                 <h2 className="movie-detail-section-title">Cast</h2>
                 <div className="movie-detail-people-grid">
                   {actors.map((a) => (
-                    <div key={a.id} className="movie-person-card">
+                    <button
+                      key={a.id}
+                      type="button"
+                      className="movie-person-card"
+                      onClick={() =>
+                        openPersonDetail(
+                          a.personId,
+                          a.characterName ? `as ${a.characterName}` : ""
+                        )
+                      }
+                    >
                       <div className="movie-person-photo">
                         {a.profilePictureUrl ? (
                           <img src={a.profilePictureUrl} alt={a.personName} />
@@ -414,7 +457,7 @@ function Home() {
                       {a.characterName && (
                         <p className="movie-person-sub">as {a.characterName}</p>
                       )}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </section>
@@ -425,7 +468,14 @@ function Home() {
                 <h2 className="movie-detail-section-title">Crew</h2>
                 <div className="movie-detail-people-grid">
                   {crew.map((c) => (
-                    <div key={c.id} className="movie-person-card">
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="movie-person-card"
+                      onClick={() =>
+                        openPersonDetail(c.personId, formatCrewRole(c.role))
+                      }
+                    >
                       <div className="movie-person-photo">
                         {c.profilePictureUrl ? (
                           <img src={c.profilePictureUrl} alt={c.personName} />
@@ -435,7 +485,7 @@ function Home() {
                       </div>
                       <p className="movie-person-name">{c.personName}</p>
                       <p className="movie-person-sub">{formatCrewRole(c.role)}</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </section>
@@ -447,9 +497,72 @@ function Home() {
           </>
         )}
 
+        {personModal && (
+          <div
+            className="person-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="person-modal-title"
+            onClick={closePersonDetail}
+          >
+            <div className="person-modal-card" onClick={(e) => e.stopPropagation()}>
+              <AuthBackButton onClick={closePersonDetail} />
+              {personModal.loading && <p className="person-modal-loading">Loading…</p>}
+              {personModal.error && <p className="person-modal-error">{personModal.error}</p>}
+              {!personModal.loading && !personModal.error && personModal.person && (
+                <>
+                  <div className="person-modal-photo">
+                    {personModal.person.profilePictureUrl ? (
+                      <img
+                        src={personModal.person.profilePictureUrl}
+                        alt={personModal.person.name}
+                      />
+                    ) : (
+                      <span className="movie-person-placeholder">👤</span>
+                    )}
+                  </div>
+                  <h2 id="person-modal-title" className="person-modal-name">
+                    {personModal.person.name}
+                  </h2>
+                  {personModal.subtitle && (
+                    <p className="person-modal-subtitle">{personModal.subtitle}</p>
+                  )}
+                  <dl className="person-modal-facts">
+                    {personModal.person.nationality && (
+                      <>
+                        <dt>Nationality</dt>
+                        <dd>{personModal.person.nationality}</dd>
+                      </>
+                    )}
+                    {personModal.person.dateOfBirth && (
+                      <>
+                        <dt>Date of birth</dt>
+                        <dd>{formatReleaseDate(personModal.person.dateOfBirth)}</dd>
+                      </>
+                    )}
+                  </dl>
+                  {personModal.person.bio && (
+                    <div className="person-modal-bio">
+                      <h3>Bio</h3>
+                      <p>{personModal.person.bio}</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {showCityPicker && (
           <div className="city-overlay">
             <div className="city-overlay-card">
+              <AuthBackButton
+                ariaLabel="Back"
+                onClick={() => {
+                  closeCityPicker();
+                  setCitySearch("");
+                }}
+              />
               <h2>Select Your City</h2>
               <p className="step-subtitle">Choose a city to see showtimes near you</p>
               <input
@@ -467,9 +580,7 @@ function Home() {
                       c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
                       c.state.toLowerCase().includes(citySearch.toLowerCase())
                   )
-                  .map((city) => {
-                    const count = theatres.filter((t) => t.cityId === city.id).length;
-                    return (
+                  .map((city) => (
                       <div
                         key={city.id}
                         className={`city-pill ${selectedCity?.id === city.id ? "active" : ""}`}
@@ -481,13 +592,10 @@ function Home() {
                         <span className="city-pill-icon">📍</span>
                         <div>
                           <strong>{city.name}</strong>
-                          <span className="city-pill-meta">
-                            {city.state} &middot; {count} {count === 1 ? "theatre" : "theatres"}
-                          </span>
+                          <span className="city-pill-meta">{city.state}</span>
                         </div>
                       </div>
-                    );
-                  })}
+                    ))}
                 {cities.filter(
                   (c) =>
                     c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
@@ -520,7 +628,6 @@ function Home() {
           <div className="movie-grid home-movie-grid">
             {browseRows.map((row) => {
               const movie = row.movie;
-              const count = row.showtimeCount ?? 0;
               return (
                 <div
                   key={movie.id}
@@ -548,11 +655,6 @@ function Home() {
                       {movie.genre} &middot; {movie.language}
                     </p>
                     <p>{formatRuntimeMinutes(movie.durationMinutes)}</p>
-                    {selectedCity && count > 0 && (
-                      <span className="movie-show-count">
-                        {count} {count === 1 ? "show" : "shows"}
-                      </span>
-                    )}
                   </div>
                 </div>
               );
@@ -564,6 +666,13 @@ function Home() {
       {showCityPicker && (
         <div className="city-overlay">
           <div className="city-overlay-card">
+            <AuthBackButton
+              ariaLabel="Back"
+              onClick={() => {
+                closeCityPicker();
+                setCitySearch("");
+              }}
+            />
             <h2>Select Your City</h2>
             <p className="step-subtitle">Choose a city to see showtimes near you</p>
             <input
@@ -581,9 +690,7 @@ function Home() {
                     c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
                     c.state.toLowerCase().includes(citySearch.toLowerCase())
                 )
-                .map((city) => {
-                  const count = theatres.filter((t) => t.cityId === city.id).length;
-                  return (
+                .map((city) => (
                     <div
                       key={city.id}
                       className={`city-pill ${selectedCity?.id === city.id ? "active" : ""}`}
@@ -595,13 +702,10 @@ function Home() {
                       <span className="city-pill-icon">📍</span>
                       <div>
                         <strong>{city.name}</strong>
-                        <span className="city-pill-meta">
-                          {city.state} &middot; {count} {count === 1 ? "theatre" : "theatres"}
-                        </span>
+                        <span className="city-pill-meta">{city.state}</span>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
               {cities.filter(
                 (c) =>
                   c.name.toLowerCase().includes(citySearch.toLowerCase()) ||

@@ -44,10 +44,20 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("cinebuzz_user");
   };
 
+  /** Merge fields into stored session (e.g. after PATCH /users/me). Keeps existing token. */
+  const updateUser = (partial) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...partial };
+      localStorage.setItem("cinebuzz_user", JSON.stringify(next));
+      return next;
+    });
+  };
+
   const isAdmin = () => user?.role === "ROLE_ADMIN";
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

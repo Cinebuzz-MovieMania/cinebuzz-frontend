@@ -10,22 +10,23 @@ function Navbar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { selectedCity, openCityPicker } = useCity();
-  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
-  const brandWrapRef = useRef(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const isActive = (path) => location.pathname === path ? "active" : "";
 
   useEffect(() => {
-    if (!brandMenuOpen) return;
+    if (!userMenuOpen) return;
     const onDoc = (e) => {
-      if (brandWrapRef.current && !brandWrapRef.current.contains(e.target)) {
-        setBrandMenuOpen(false);
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [brandMenuOpen]);
+  }, [userMenuOpen]);
 
   const handleLogout = async () => {
+    setUserMenuOpen(false);
     await releaseCheckoutDraftHolds();
     logout();
     navigate("/");
@@ -37,49 +38,32 @@ function Navbar() {
     navigate("/");
   };
 
-  const handleNavFromCheckout = async (e, path) => {
+  /** CineBuzz → Now Showing; release checkout holds if leaving payment page. */
+  const handleBrandHomeClick = async (e) => {
     if (location.pathname === "/booking/checkout") {
       e.preventDefault();
       await releaseCheckoutDraftHolds();
-      setBrandMenuOpen(false);
+      navigate("/");
+    }
+  };
+
+  const handleUserMenuNav = async (e, path) => {
+    if (location.pathname === "/booking/checkout") {
+      e.preventDefault();
+      setUserMenuOpen(false);
+      await releaseCheckoutDraftHolds();
       navigate(path);
       return;
     }
-    setBrandMenuOpen(false);
+    setUserMenuOpen(false);
   };
 
   return (
     <nav className="navbar">
       {user ? (
-        <div className="navbar-brand-wrap" ref={brandWrapRef}>
-          <button
-            type="button"
-            className="brand brand-toggle"
-            aria-expanded={brandMenuOpen}
-            aria-haspopup="true"
-            onClick={() => setBrandMenuOpen((o) => !o)}
-          >
-            CineBuzz
-          </button>
-          {brandMenuOpen && (
-            <div className="navbar-brand-menu" role="menu">
-              <Link
-                to="/"
-                role="menuitem"
-                onClick={(e) => handleNavFromCheckout(e, "/")}
-              >
-                Home
-              </Link>
-              <Link
-                to="/bookings"
-                role="menuitem"
-                onClick={(e) => handleNavFromCheckout(e, "/bookings")}
-              >
-                My bookings
-              </Link>
-            </div>
-          )}
-        </div>
+        <Link to="/" className="brand" onClick={handleBrandHomeClick}>
+          CineBuzz
+        </Link>
       ) : (
         <>
           <Link to="/" className="brand">CineBuzz</Link>
@@ -91,10 +75,44 @@ function Navbar() {
         📍 {selectedCity ? selectedCity.name : "Select City"}
       </button>
       {user ? (
-        <>
-          <span className="navbar-user">{user.name}</span>
-          <button type="button" className="navbar-logout" onClick={handleLogout}>Sign out</button>
-        </>
+        <div className="navbar-user-wrap" ref={userMenuRef}>
+          <button
+            type="button"
+            className="navbar-user-toggle"
+            aria-expanded={userMenuOpen}
+            aria-haspopup="true"
+            aria-label={`${user.name}, account menu`}
+            onClick={() => setUserMenuOpen((o) => !o)}
+          >
+            <span className="navbar-user-emoji" aria-hidden="true">
+              👤
+            </span>
+            <span>{user.name}</span>
+          </button>
+          {userMenuOpen && (
+            <div className="navbar-user-menu" role="menu">
+              <Link
+                to="/bookings"
+                role="menuitem"
+                className="navbar-user-menu-item navbar-user-menu-link"
+                onClick={(e) => handleUserMenuNav(e, "/bookings")}
+              >
+                My bookings
+              </Link>
+              <Link
+                to="/profile"
+                role="menuitem"
+                className="navbar-user-menu-item navbar-user-menu-link"
+                onClick={(e) => handleUserMenuNav(e, "/profile")}
+              >
+                Edit profile
+              </Link>
+              <button type="button" className="navbar-user-menu-item" role="menuitem" onClick={handleLogout}>
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="navbar-auth">
           <button

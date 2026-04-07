@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { AuthBackButton } from "../components/AuthBackButton";
 import { AuthAPI } from "../services/api";
 import { navigateAfterClosingAuthPanel } from "../utils/authNav";
 
@@ -43,9 +44,7 @@ function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <button type="button" className="login-card-close" onClick={handleClose} aria-label="Close">
-          ×
-        </button>
+        <AuthBackButton onClick={handleClose} ariaLabel="Back" />
         <div className="login-brand">CineBuzz</div>
         <h2>Sign in</h2>
         {paymentFlow ? (
