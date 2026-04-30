@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PublicAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { AuthBackButton } from "./AuthBackButton";
 import { readHomeReturnSnapshot } from "../utils/homeReturnSnapshot";
 import {
   clearBookingCheckoutDraft,
@@ -226,9 +227,7 @@ function SeatLayout({ showtime, onClose = () => {} }) {
   return (
     <div className="form-overlay" onClick={onClose}>
       <div className="seat-layout-card" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="seat-close-btn" onClick={onClose} aria-label="Close">
-          &times;
-        </button>
+        <AuthBackButton onClick={onClose} ariaLabel="Back" />
 
         <div className="seat-header">
           <h2>{showtime.movieTitle}</h2>

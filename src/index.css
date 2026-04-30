@@ -1195,6 +1195,96 @@ tr:hover {
   gap: 8px;
 }
 
+.cell-thumb {
+  width: 52px;
+  vertical-align: middle;
+  text-align: center;
+}
+
+/* Table: same circle size with or without photo (global .poster-placeholder is 160×220 — override) */
+.cell-thumb .poster-placeholder {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  margin: 0 auto;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.person-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  display: block;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.person-profile-upload .person-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+/* Modal: fixed small circle — placeholder matches image (override global .poster-placeholder) */
+.person-profile-preview {
+  width: 72px;
+  height: 72px;
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.person-profile-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.person-profile-preview .poster-placeholder {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  line-height: 1;
+  opacity: 0.55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.person-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* ── Form / Modal ─── */
 .form-overlay {
   position: fixed;
@@ -1701,7 +1791,367 @@ button.movie-person-card:focus-visible {
   }
 }
 
-/* ── Split Layout (List + Detail) ─── */
+/* ── Admin Movies: full-width list + details below ─── */
+.admin-movies-page {
+  max-width: none !important;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+.admin-movies-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.admin-movies-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+
+.admin-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 520px;
+}
+
+.admin-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.admin-search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.page-header-with-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.page-header-with-search h1 {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.page-header-with-search .admin-search-bar {
+  flex: 1;
+  min-width: 200px;
+  max-width: 420px;
+}
+
+.page-header-with-search > .btn {
+  flex-shrink: 0;
+}
+
+/* Admin Showtimes: title row, then full-width filter panel */
+.admin-showtimes-head {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.admin-showtimes-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.admin-showtimes-title-row h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.5vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.admin-showtimes-filters-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(200px, auto);
+  gap: 16px 20px;
+  align-items: end;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 18px 20px;
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(248, 250, 252, 0.92) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-xs), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.admin-showtimes-filters-panel .admin-showtimes-filter-search {
+  min-width: 0;
+}
+
+.admin-showtimes-filters-panel .admin-search-bar {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+}
+
+@media (max-width: 1100px) {
+  .admin-showtimes-filters-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-showtimes-filters-panel .admin-showtimes-filter-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-showtimes-filters-panel {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+}
+
+.admin-showtimes-theatre-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.admin-showtimes-filters-panel .admin-showtimes-theatre-filter,
+.admin-showtimes-filters-panel .admin-showtimes-screen-filter,
+.admin-showtimes-filters-panel .admin-showtimes-date-filter {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-showtimes-screen-filter .admin-filter-select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: var(--bg-secondary);
+}
+
+.admin-showtimes-filters-panel .admin-filter-select {
+  max-width: none;
+}
+
+.admin-showtimes-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+}
+
+.admin-filter-select {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface);
+  color: var(--text);
+  min-width: 0;
+  max-width: 280px;
+  width: 100%;
+}
+
+.admin-filter-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.admin-showtimes-date-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.admin-showtimes-date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-filter-date-input {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface);
+  color: var(--text);
+  min-height: 38px;
+  max-width: 200px;
+}
+
+.admin-filter-date-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.admin-movies-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: var(--surface);
+}
+
+.admin-movies-list .list-item-full {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-movies-list .list-item-full:focus {
+  outline: none;
+}
+
+.admin-movies-list .list-item-full:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* Movie row: title + detail columns fill the row (genre, language, duration, release) */
+.admin-movies-list .admin-movie-row.list-item {
+  align-items: center;
+  gap: 16px;
+}
+
+.admin-movie-row-title {
+  flex: 0 1 220px;
+  min-width: 0;
+  max-width: min(320px, 30vw);
+}
+
+.admin-movie-row-title-text {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-movie-row-details {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 20px;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.admin-movie-detail-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-movie-detail-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-light);
+}
+
+.admin-movie-detail-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 960px) {
+  .admin-movie-row-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-movie-row-title {
+    max-width: 42%;
+  }
+}
+
+.admin-movies-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-light);
+  background: var(--surface);
+}
+
+.admin-movies-select-hint {
+  padding: 28px 24px 40px;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 15px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+
+.admin-movies-select-hint p {
+  margin: 0;
+}
+
+.admin-movie-detail-panel {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 28px 28px 40px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+
+.admin-movie-detail-page {
+  max-width: none !important;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+.admin-movie-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.admin-movie-detail-page .admin-movie-detail-panel {
+  border-top: none;
+}
+
+/* ── Split Layout (List + Detail) — legacy / other uses ─── */
 .split-layout {
   display: flex;
   gap: 0;
@@ -1761,6 +2211,8 @@ button.movie-person-card:focus-visible {
 .list-item-poster {
   width: 44px;
   height: 60px;
+  min-width: 44px;
+  min-height: 60px;
   border-radius: 6px;
   background: #e9ecef;
   overflow: hidden;
@@ -1768,13 +2220,27 @@ button.movie-person-card:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  box-sizing: border-box;
+  border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .list-item-poster img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.list-item-poster-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .list-item-info {
@@ -1849,12 +2315,40 @@ button.movie-person-card:focus-visible {
   gap: 8px;
 }
 
-.movie-detail-poster img {
+/* Fixed frame: poster image and empty state share the same box (centered, no shrink-left) */
+.movie-detail-poster-frame {
   width: 160px;
   height: 220px;
-  object-fit: cover;
+  min-width: 160px;
+  min-height: 220px;
   border-radius: 10px;
+  overflow: hidden;
   background: #e9ecef;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.movie-detail-poster-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.movie-detail-poster-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  line-height: 1;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .poster-placeholder {
@@ -2062,7 +2556,8 @@ button.movie-person-card:focus-visible {
   background: linear-gradient(165deg, #1e2130 0%, #141622 55%, #0f111a 100%);
   border-radius: var(--radius-xl);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 32px;
+  /* Extra top padding for .login-card-back */
+  padding: 48px 32px 32px;
   width: 95%;
   max-width: 900px;
   max-height: 92vh;
@@ -2072,21 +2567,14 @@ button.movie-person-card:focus-visible {
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(79, 195, 247, 0.06) inset;
 }
 
-.seat-close-btn {
-  position: absolute;
-  top: 16px;
-  right: 20px;
-  background: none;
-  border: none;
-  color: #aaa;
-  font-size: 28px;
-  cursor: pointer;
-  line-height: 1;
-  transition: color 0.2s;
+/* Dark card: chevron visible (same control as login / city / person modal) */
+.seat-layout-card .login-card-back {
+  color: rgba(255, 255, 255, 0.88);
 }
 
-.seat-close-btn:hover {
-  color: white;
+.seat-layout-card .login-card-back:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .seat-header {
@@ -2834,6 +3322,24 @@ button.seat.available {
 .showtime-mini-seats {
   font-size: 11px;
   color: var(--text-light);
+}
+
+.showtime-started-dialog h2 {
+  margin: 0 0 12px;
+  font-size: 1.25rem;
+}
+
+.showtime-started-dialog-text {
+  margin: 0 0 20px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.showtime-started-dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 @media (hover: none) and (pointer: coarse) {

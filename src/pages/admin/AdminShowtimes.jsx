@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import API from "../../services/api";
 import { formatRuntimeMinutes } from "../../utils/formatRuntime";
 import SeatLayout from "../../components/SeatLayout";
@@ -13,6 +13,17 @@ function formatEndPreview(startLocal, durationMinutes) {
   return d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** Local calendar date YYYY-MM-DD for filtering (matches browser date input). */
+function localDateKeyFromIso(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function AdminShowtimes() {
   const [showtimes, setShowtimes] = useState([]);
   const [movies, setMovies] = useState([]);
@@ -23,6 +34,26 @@ function AdminShowtimes() {
   const [form, setForm] = useState(emptyForm);
   const [selectedTheatre, setSelectedTheatre] = useState("");
   const [viewingShowtime, setViewingShowtime] = useState(null);
+  const [filterTitleInput, setFilterTitleInput] = useState("");
+  const [filterTitle, setFilterTitle] = useState("");
+  const [filterTheatreId, setFilterTheatreId] = useState("");
+  const [filterScreenId, setFilterScreenId] = useState("");
+  const [filterScreens, setFilterScreens] = useState([]);
+  const [filterDate, setFilterDate] = useState("");
+
+  const applyTitleFilter = () => setFilterTitle(filterTitleInput.trim());
+
+  const filteredShowtimes = useMemo(() => {
+    const q = filterTitle.toLowerCase();
+    return showtimes.filter((s) => {
+      const titleOk = !q || (s.movieTitle || "").toLowerCase().includes(q);
+      const theatreOk = !filterTheatreId
+        || (s.theatreName === theatres.find((t) => String(t.id) === filterTheatreId)?.name);
+      const screenOk = !filterScreenId || String(s.screenId) === filterScreenId;
+      const dateOk = !filterDate || localDateKeyFromIso(s.startTime) === filterDate;
+      return titleOk && theatreOk && screenOk && dateOk;
+    });
+  }, [showtimes, filterTitle, filterTheatreId, filterScreenId, filterDate, theatres]);
 
   const fetchShowtimes = () => {
     API.get("/showtimes")
@@ -52,6 +83,21 @@ function AdminShowtimes() {
 
   useEffect(() => { fetchShowtimes(); fetchMovies(); fetchTheatres(); }, []);
   useEffect(() => { fetchScreens(selectedTheatre); }, [selectedTheatre]);
+
+  useEffect(() => {
+    if (!filterTheatreId) {
+      setFilterScreens([]);
+      setFilterScreenId("");
+      return;
+    }
+    API.get(`/screens/theatre/${filterTheatreId}`)
+      .then((res) => setFilterScreens(res.data.data || []))
+      .catch((err) => {
+        console.error(err);
+        setFilterScreens([]);
+      });
+    setFilterScreenId("");
+  }, [filterTheatreId]);
 
   const openCreate = () => {
     setForm(emptyForm);
@@ -100,16 +146,108 @@ function AdminShowtimes() {
 
   if (loading) return <div className="loading">Loading showtimes...</div>;
 
+  const hasActiveFilters = Boolean(filterTitle || filterTheatreId || filterScreenId || filterDate);
+  const clearFilters = () => {
+    setFilterTitleInput("");
+    setFilterTitle("");
+    setFilterTheatreId("");
+    setFilterScreenId("");
+    setFilterScreens([]);
+    setFilterDate("");
+  };
+
   return (
     <div className="page">
-      <div className="page-header">
-        <h1>Showtimes</h1>
-        <button className="btn btn-primary" onClick={openCreate}>+ Add Showtime</button>
+      <div className="admin-showtimes-head">
+        <div className="admin-showtimes-title-row">
+          <h1>Showtimes</h1>
+          <button className="btn btn-primary" type="button" onClick={openCreate}>+ Add Showtime</button>
+        </div>
+        <div className="admin-showtimes-filters-panel" role="search" aria-label="Filter showtimes">
+          <div className="admin-search-bar admin-showtimes-filter-search">
+            <input
+              type="search"
+              className="admin-search-input"
+              placeholder="Filter by movie title…"
+              value={filterTitleInput}
+              onChange={(e) => setFilterTitleInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyTitleFilter();
+                }
+              }}
+              aria-label="Filter by movie title"
+            />
+            <button className="btn btn-secondary btn-sm" type="button" onClick={applyTitleFilter}>
+              Search
+            </button>
+          </div>
+          <label className="admin-showtimes-theatre-filter">
+            <span className="admin-showtimes-filter-label">Theatre</span>
+            <select
+              className="admin-filter-select"
+              value={filterTheatreId}
+              onChange={(e) => setFilterTheatreId(e.target.value)}
+              aria-label="Filter by theatre"
+            >
+              <option value="">All theatres</option>
+              {theatres.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}{t.cityName ? ` (${t.cityName})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-showtimes-screen-filter">
+            <span className="admin-showtimes-filter-label">Screen</span>
+            <select
+              className="admin-filter-select"
+              value={filterScreenId}
+              onChange={(e) => setFilterScreenId(e.target.value)}
+              disabled={!filterTheatreId}
+              aria-label="Filter by screen"
+            >
+              <option value="">{filterTheatreId ? "All screens" : "Select a theatre first"}</option>
+              {filterScreens.map((sc) => (
+                <option key={sc.id} value={sc.id}>
+                  {sc.name}{sc.totalSeats != null ? ` (${sc.totalSeats} seats)` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-showtimes-date-filter">
+            <span className="admin-showtimes-filter-label">Show date</span>
+            <div className="admin-showtimes-date-row">
+              <input
+                type="date"
+                className="admin-filter-date-input"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                aria-label="Filter by show date"
+              />
+              {filterDate && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilterDate("")}>
+                  Any date
+                </button>
+              )}
+            </div>
+          </label>
+        </div>
       </div>
 
       <div className="table-container">
         {showtimes.length === 0 ? (
           <div className="empty">No showtimes found. Add one to get started.</div>
+        ) : filteredShowtimes.length === 0 ? (
+          <div className="empty">
+            <p>No showtimes match your filters.</p>
+            {hasActiveFilters && (
+              <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={clearFilters}>
+                Clear filters
+              </button>
+            )}
+          </div>
         ) : (
           <table>
             <thead>
@@ -126,7 +264,7 @@ function AdminShowtimes() {
               </tr>
             </thead>
             <tbody>
-              {showtimes.map((s) => (
+              {filteredShowtimes.map((s) => (
                 <tr key={s.id} onClick={() => setViewingShowtime(s)} style={{ cursor: "pointer" }}>
                   <td>{s.id}</td>
                   <td>{s.movieTitle}</td>

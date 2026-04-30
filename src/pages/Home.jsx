@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API, { PublicAPI } from "../services/api";
 import SeatLayout from "../components/SeatLayout";
@@ -52,8 +52,23 @@ function Home() {
 
   const [movieDayShowtimes, setMovieDayShowtimes] = useState([]);
   const [movieDayLoading, setMovieDayLoading] = useState(false);
+  /** Bumps periodically while booking UI is open so ended showtimes drop off without a full refetch. */
+  const [showtimeRefreshTick, setShowtimeRefreshTick] = useState(0);
+  /** User picked a show that already started — confirm before opening seat map. */
+  const [startedShowConfirm, setStartedShowConfirm] = useState(null);
 
   const sevenDays = buildSevenDaysFromToday();
+
+  useEffect(() => {
+    if (!bookingOpen) return undefined;
+    const id = window.setInterval(() => setShowtimeRefreshTick((t) => t + 1), 30000);
+    return () => window.clearInterval(id);
+  }, [bookingOpen]);
+
+  const activeMovieDayShowtimes = useMemo(() => {
+    const now = Date.now();
+    return movieDayShowtimes.filter((s) => new Date(s.endTime).getTime() > now);
+  }, [movieDayShowtimes, showtimeRefreshTick]);
 
   useEffect(() => {
     API.get("/cities")
@@ -181,7 +196,7 @@ function Home() {
     };
   }, [location.state, location.pathname, navigate]);
 
-  const movieShowtimesByTheatre = movieDayShowtimes.reduce((acc, s) => {
+  const movieShowtimesByTheatre = activeMovieDayShowtimes.reduce((acc, s) => {
     if (!acc[s.theatreName]) acc[s.theatreName] = [];
     acc[s.theatreName].push(s);
     return acc;
@@ -190,6 +205,22 @@ function Home() {
   Object.keys(movieShowtimesByTheatre).forEach((name) => {
     movieShowtimesByTheatre[name].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
   });
+
+  const onShowtimeClick = (s) => {
+    const nowMs = Date.now();
+    if (new Date(s.endTime).getTime() <= nowMs) return;
+    const startMs = new Date(s.startTime).getTime();
+    if (startMs <= nowMs) {
+      setStartedShowConfirm(s);
+      return;
+    }
+    setViewingShowtime(s);
+  };
+
+  const confirmStartedShow = () => {
+    if (startedShowConfirm) setViewingShowtime(startedShowConfirm);
+    setStartedShowConfirm(null);
+  };
 
   const formatTimeOnly = (dt) => {
     if (!dt) return "";
@@ -344,7 +375,9 @@ function Home() {
           <div className="loading">Loading showtimes…</div>
         ) : theatreNames.length === 0 ? (
           <div className="empty date-empty">
-            No shows for this movie on this date.
+            {movieDayShowtimes.length > 0 && activeMovieDayShowtimes.length === 0
+              ? "All showtimes for this movie on this date have already ended."
+              : "No shows for this movie on this date."}
           </div>
         ) : (
           <div className="theatre-date-layout">
@@ -359,7 +392,7 @@ function Home() {
                         key={s.id}
                         type="button"
                         className="showtime-mini-box"
-                        onClick={() => setViewingShowtime(s)}
+                        onClick={() => onShowtimeClick(s)}
                         aria-label={`${formatTimeOnly(s.startTime)}, ₹${s.price}, ${s.availableSeats} seats available`}
                       >
                         <span className="showtime-mini-time">{formatTimeOnly(s.startTime)}</span>
@@ -373,6 +406,31 @@ function Home() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {startedShowConfirm && (
+          <div
+            className="person-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="started-show-title"
+            onClick={() => setStartedShowConfirm(null)}
+          >
+            <div className="person-modal-card showtime-started-dialog" onClick={(e) => e.stopPropagation()}>
+              <h2 id="started-show-title">Show already started</h2>
+              <p className="showtime-started-dialog-text">
+                This show has already started. Do you wish to continue?
+              </p>
+              <div className="showtime-started-dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setStartedShowConfirm(null)}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-primary" onClick={confirmStartedShow}>
+                  Continue
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import API from "../../services/api";
 import { formatRuntimeMinutes } from "../../utils/formatRuntime";
 
@@ -7,206 +8,40 @@ const emptyForm = {
   durationMinutes: "", releaseDate: "", posterUrl: "", posterKey: "",
 };
 
-const ROLES = ["ACTOR", "DIRECTOR", "PRODUCER", "WRITER", "CINEMATOGRAPHER"];
-const emptyCastForm = { personId: "", role: "", characterName: "", billingOrder: "" };
-
-function MovieDetail({ movie, persons, onMovieUpdate }) {
-  const [cast, setCast] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showCastForm, setShowCastForm] = useState(false);
-  const [castForm, setCastForm] = useState(emptyCastForm);
-  const [uploading, setUploading] = useState(false);
-  const posterInputRef = useRef(null);
-
-  const fetchCast = () => {
-    setLoading(true);
-    API.get(`/movies/${movie.id}/cast`)
-      .then((res) => setCast(res.data.data || []))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { fetchCast(); }, [movie.id]);
-
-  const actors = cast.filter((c) => c.role === "ACTOR");
-  const crew = cast.filter((c) => c.role !== "ACTOR");
-
-  const handlePosterUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    API.post(`/movies/${movie.id}/poster`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
-      .then((res) => { if (onMovieUpdate) onMovieUpdate(res.data.data); })
-      .catch((err) => alert(err.response?.data?.message || "Upload failed"))
-      .finally(() => setUploading(false));
-  };
-
-  const handlePosterRemove = () => {
-    if (!confirm("Remove this poster?")) return;
-    API.delete(`/movies/${movie.id}/poster`)
-      .then((res) => { if (onMovieUpdate) onMovieUpdate(res.data.data); })
-      .catch((err) => alert(err.response?.data?.message || "Remove failed"));
-  };
-
-  const handleAddCast = (e) => {
-    e.preventDefault();
-    const payload = {
-      personId: Number(castForm.personId),
-      role: castForm.role,
-      characterName: castForm.characterName || null,
-      billingOrder: castForm.billingOrder ? Number(castForm.billingOrder) : null,
-    };
-    API.post(`/movies/${movie.id}/cast`, payload)
-      .then(() => { setShowCastForm(false); setCastForm(emptyCastForm); fetchCast(); })
-      .catch((err) => alert(err.response?.data?.message || "Error adding cast"));
-  };
-
-  const handleRemoveCast = (personId) => {
-    if (!confirm("Remove this person from the movie?")) return;
-    API.delete(`/movies/${movie.id}/cast/${personId}`)
-      .then(() => fetchCast())
-      .catch((err) => alert(err.response?.data?.message || "Error removing cast"));
-  };
-
-  const setCF = (field, value) => setCastForm({ ...castForm, [field]: value });
-
-  return (
-    <div className="detail-panel">
-      <div className="movie-detail-header">
-        <div className="movie-detail-poster">
-          {movie.posterUrl ? (
-            <img src={movie.posterUrl} alt={movie.title} />
-          ) : (
-            <span className="poster-placeholder">🎬</span>
-          )}
-          <div className="poster-actions">
-            <input type="file" accept="image/*" ref={posterInputRef} onChange={handlePosterUpload} style={{ display: "none" }} />
-            <button className="btn btn-sm btn-primary" onClick={() => posterInputRef.current?.click()} disabled={uploading}>
-              {uploading ? "Uploading..." : movie.posterUrl ? "Change" : "Upload"}
-            </button>
-            {movie.posterUrl && (
-              <button className="btn btn-sm btn-danger" onClick={handlePosterRemove}>Remove</button>
-            )}
-          </div>
-        </div>
-        <div className="movie-detail-info">
-          <h2>{movie.title}</h2>
-          <p className="movie-detail-meta">{movie.genre} &middot; {movie.language} &middot; {formatRuntimeMinutes(movie.durationMinutes)}</p>
-          <p className="movie-detail-meta">Released: {movie.releaseDate}</p>
-          {movie.description && <p className="movie-detail-desc">{movie.description}</p>}
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="loading">Loading cast &amp; crew...</div>
-      ) : (
-        <div className="cast-crew-section">
-          <div className="cast-crew-header">
-            <h3>Cast &amp; Crew</h3>
-            <button className="btn btn-sm btn-primary" onClick={() => setShowCastForm(true)}>+ Add</button>
-          </div>
-
-          {cast.length === 0 ? (
-            <p className="cast-empty">No cast or crew added yet.</p>
-          ) : (
-            <>
-              {actors.length > 0 && (
-                <div className="cast-group">
-                  <h4>Cast</h4>
-                  <div className="cast-grid">
-                    {actors.map((a) => (
-                      <div key={a.id} className="cast-card">
-                        <div className="cast-avatar">
-                          {a.profilePictureUrl ? <img src={a.profilePictureUrl} alt={a.personName} /> : <span>👤</span>}
-                        </div>
-                        <div className="cast-info">
-                          <strong>{a.personName}</strong>
-                          {a.characterName && <span className="cast-character">as {a.characterName}</span>}
-                        </div>
-                        <button className="cast-remove" onClick={() => handleRemoveCast(a.personId)} title="Remove">&times;</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {crew.length > 0 && (
-                <div className="cast-group">
-                  <h4>Crew</h4>
-                  <div className="cast-grid">
-                    {crew.map((c) => (
-                      <div key={c.id} className="cast-card">
-                        <div className="cast-avatar">
-                          {c.profilePictureUrl ? <img src={c.profilePictureUrl} alt={c.personName} /> : <span>👤</span>}
-                        </div>
-                        <div className="cast-info">
-                          <strong>{c.personName}</strong>
-                          <span className="cast-role">{c.role}</span>
-                        </div>
-                        <button className="cast-remove" onClick={() => handleRemoveCast(c.personId)} title="Remove">&times;</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {showCastForm && (
-        <div className="cast-form-inline">
-          <h4>Add Cast / Crew</h4>
-          <form onSubmit={handleAddCast}>
-            <div className="cast-form-row">
-              <div className="form-group">
-                <label>Person</label>
-                <select value={castForm.personId} onChange={(e) => setCF("personId", e.target.value)} required>
-                  <option value="">Select person</option>
-                  {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Role</label>
-                <select value={castForm.role} onChange={(e) => setCF("role", e.target.value)} required>
-                  <option value="">Select role</option>
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="cast-form-row">
-              <div className="form-group">
-                <label>Character Name</label>
-                <input value={castForm.characterName} onChange={(e) => setCF("characterName", e.target.value)} placeholder="e.g. Dom Cobb (for actors)" />
-              </div>
-              <div className="form-group">
-                <label>Billing Order</label>
-                <input type="number" min="1" value={castForm.billingOrder} onChange={(e) => setCF("billingOrder", e.target.value)} placeholder="e.g. 1" />
-              </div>
-            </div>
-            <div className="form-actions">
-              <button type="submit" className="btn btn-success btn-sm">Add</button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowCastForm(false)}>Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
-  );
+function movieMatchesSearch(m, q) {
+  const t = (q || "").trim().toLowerCase();
+  if (!t) return true;
+  const hay = [
+    m.title,
+    m.genre,
+    m.language,
+    m.description,
+    m.releaseDate != null ? String(m.releaseDate) : "",
+    m.durationMinutes != null ? String(m.durationMinutes) : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(t);
 }
 
 function AdminMovies() {
   const [movies, setMovies] = useState([]);
-  const [persons, setPersons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
-  const [viewingMovie, setViewingMovie] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const applySearch = () => setSearchQuery(searchInput.trim());
+
+  const filteredMovies = useMemo(
+    () => movies.filter((m) => movieMatchesSearch(m, searchQuery)),
+    [movies, searchQuery],
+  );
 
   const fetchMovies = () => {
     API.get("/movies")
@@ -215,13 +50,27 @@ function AdminMovies() {
       .finally(() => setLoading(false));
   };
 
-  const fetchPersons = () => {
-    API.get("/persons")
-      .then((res) => setPersons(res.data.data || []))
-      .catch((err) => console.error(err));
-  };
+  useEffect(() => { fetchMovies(); }, []);
 
-  useEffect(() => { fetchMovies(); fetchPersons(); }, []);
+  useEffect(() => {
+    const editId = location.state?.editMovieId;
+    if (!editId || !movies.length) return;
+    const m = movies.find((x) => x.id === editId);
+    if (!m) return;
+    setEditing(m.id);
+    setForm({
+      title: m.title,
+      description: m.description || "",
+      genre: m.genre,
+      language: m.language,
+      durationMinutes: m.durationMinutes,
+      releaseDate: m.releaseDate,
+      posterUrl: m.posterUrl || "",
+      posterKey: "",
+    });
+    setShowForm(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, movies, location.pathname, navigate]);
 
   const openCreate = () => {
     setEditing(null);
@@ -256,69 +105,105 @@ function AdminMovies() {
     e.stopPropagation();
     if (!confirm("Delete this movie?")) return;
     API.delete(`/movies/${id}`)
-      .then(() => {
-        fetchMovies();
-        if (viewingMovie?.id === id) setViewingMovie(null);
-      })
+      .then(() => fetchMovies())
       .catch((err) => alert(err.response?.data?.message || "Error deleting movie"));
   };
 
   const set = (field, value) => setForm({ ...form, [field]: value });
 
-  if (loading) return <div className="loading">Loading movies...</div>;
+  if (loading) {
+    return (
+      <div className="page admin-movies-page">
+        <div className="loading">Loading movies...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="page split-layout">
-      <div className="list-panel">
-        <div className="list-panel-header">
-          <h2>Movies</h2>
-          <button className="btn btn-primary btn-sm" onClick={openCreate}>+ Add</button>
+    <div className="page admin-movies-page">
+      <div className="admin-movies-toolbar">
+        <h2 className="admin-movies-title">Movies</h2>
+        <div className="admin-search-bar">
+          <input
+            type="search"
+            className="admin-search-input"
+            placeholder="Search by title, genre, language…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                applySearch();
+              }
+            }}
+            aria-label="Search movies"
+          />
+          <button className="btn btn-secondary btn-sm" type="button" onClick={applySearch}>
+            Search
+          </button>
         </div>
-
-        {movies.length === 0 ? (
-          <div className="empty">No movies found.</div>
-        ) : (
-          <div className="list-panel-items">
-            {movies.map((m) => (
-              <div
-                key={m.id}
-                className={`list-item ${viewingMovie?.id === m.id ? "active" : ""}`}
-                onClick={() => setViewingMovie(m)}
-              >
-                <div className="list-item-poster">
-                  {m.posterUrl ? (
-                    <img src={m.posterUrl} alt={m.title} />
-                  ) : (
-                    <span>🎬</span>
-                  )}
-                </div>
-                <div className="list-item-info">
-                  <strong>{m.title}</strong>
-                  <span className="list-item-meta">{m.genre} &middot; {m.language}</span>
-                  <span className="list-item-meta">{formatRuntimeMinutes(m.durationMinutes)} &middot; {m.releaseDate}</span>
-                </div>
-                <div className="list-item-actions">
-                  <button className="btn btn-sm btn-primary" onClick={(e) => openEdit(m, e)}>Edit</button>
-                  <button className="btn btn-sm btn-danger" onClick={(e) => handleDelete(m.id, e)}>Del</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <button className="btn btn-primary btn-sm" type="button" onClick={openCreate}>+ Add</button>
       </div>
 
-      {viewingMovie ? (
-        <MovieDetail
-          movie={viewingMovie}
-          persons={persons}
-          onMovieUpdate={(updated) => {
-            setViewingMovie(updated);
-            setMovies((prev) => prev.map((m) => m.id === updated.id ? updated : m));
-          }}
-        />
+      {movies.length === 0 ? (
+        <div className="admin-movies-empty">No movies found.</div>
+      ) : filteredMovies.length === 0 ? (
+        <div className="admin-movies-empty">
+          <p>No movies match &ldquo;{searchQuery}&rdquo;.</p>
+          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => { setSearchInput(""); setSearchQuery(""); }}>
+            Clear search
+          </button>
+        </div>
       ) : (
-        <div className="detail-panel detail-empty">
-          <p>Select a movie to view details</p>
+        <div className="admin-movies-list">
+          {filteredMovies.map((m) => (
+            <div
+              key={m.id}
+              role="button"
+              tabIndex={0}
+              className="list-item list-item-full admin-movie-row"
+              onClick={() => navigate(`/admin/movies/${m.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  navigate(`/admin/movies/${m.id}`);
+                }
+              }}
+            >
+              <div className="list-item-poster">
+                {m.posterUrl ? (
+                  <img src={m.posterUrl} alt="" />
+                ) : (
+                  <span className="list-item-poster-placeholder" aria-hidden>🎬</span>
+                )}
+              </div>
+              <div className="admin-movie-row-title">
+                <strong className="admin-movie-row-title-text">{m.title}</strong>
+              </div>
+              <div className="admin-movie-row-details">
+                <div className="admin-movie-detail-cell">
+                  <span className="admin-movie-detail-label">Genre</span>
+                  <span className="admin-movie-detail-value">{m.genre || "—"}</span>
+                </div>
+                <div className="admin-movie-detail-cell">
+                  <span className="admin-movie-detail-label">Language</span>
+                  <span className="admin-movie-detail-value">{m.language || "—"}</span>
+                </div>
+                <div className="admin-movie-detail-cell">
+                  <span className="admin-movie-detail-label">Duration</span>
+                  <span className="admin-movie-detail-value">{formatRuntimeMinutes(m.durationMinutes)}</span>
+                </div>
+                <div className="admin-movie-detail-cell">
+                  <span className="admin-movie-detail-label">Release</span>
+                  <span className="admin-movie-detail-value">{m.releaseDate || "—"}</span>
+                </div>
+              </div>
+              <div className="list-item-actions">
+                <button type="button" className="btn btn-sm btn-primary" onClick={(e) => openEdit(m, e)}>Edit</button>
+                <button type="button" className="btn btn-sm btn-danger" onClick={(e) => handleDelete(m.id, e)}>Del</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
