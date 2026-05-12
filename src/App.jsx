@@ -12,6 +12,7 @@ import AdminMovies from "./pages/admin/AdminMovies";
 import AdminMovieDetail from "./pages/admin/AdminMovieDetail";
 import AdminPersons from "./pages/admin/AdminPersons";
 import AdminShowtimes from "./pages/admin/AdminShowtimes";
+import AdminUsers from "./pages/admin/AdminUsers";
 import BookingCheckout from "./pages/BookingCheckout";
 import BookingConfirmation from "./pages/BookingConfirmation";
 import BookingSeatUnavailable from "./pages/BookingSeatUnavailable";
@@ -66,6 +67,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/admin/users" element={<ProtectedRoute superAdminOnly><AdminUsers /></ProtectedRoute>} />
         <Route path="/admin/cities" element={<ProtectedRoute adminOnly><AdminCities /></ProtectedRoute>} />
         <Route path="/admin/theatres" element={<ProtectedRoute adminOnly><AdminTheatres /></ProtectedRoute>} />
         <Route path="/admin/screens" element={<ProtectedRoute adminOnly><AdminScreens /></ProtectedRoute>} />

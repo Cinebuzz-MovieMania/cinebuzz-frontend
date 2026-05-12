@@ -1,6 +1,8 @@
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const LINKS = [
+  { to: "/admin/users", label: "Members" },
   { to: "/admin/cities", label: "Cities" },
   { to: "/admin/theatres", label: "Theatres" },
   { to: "/admin/screens", label: "Screens" },
@@ -11,12 +13,14 @@ const LINKS = [
 
 function AdminSidebar() {
   const loc = useLocation();
+  const { isSuperAdmin } = useAuth();
+  const visibleLinks = LINKS.filter((l) => l.to !== "/admin/users" || isSuperAdmin());
 
   return (
     <aside className="admin-sidebar">
       <div className="admin-sidebar-title">Admin</div>
       <nav className="admin-sidebar-nav">
-        {LINKS.map(({ to, label, prefixMatch }) => (
+        {visibleLinks.map(({ to, label, prefixMatch }) => (
           <NavLink
             key={to}
             to={to}

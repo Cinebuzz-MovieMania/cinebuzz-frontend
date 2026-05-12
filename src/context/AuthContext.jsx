@@ -54,10 +54,16 @@ export function AuthProvider({ children }) {
     });
   };
 
-  const isAdmin = () => user?.role === "ROLE_ADMIN";
+  /** Promoted admin or seeded super admin — both can use admin APIs (demote is super-admin-only on backend). */
+  const isAdmin = () =>
+    user?.role === "ROLE_ADMIN" || user?.role === "ROLE_SUPER_ADMIN";
+
+  const isSuperAdmin = () => user?.role === "ROLE_SUPER_ADMIN";
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, isAdmin }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, logout, updateUser, isAdmin, isSuperAdmin }}
+    >
       {children}
     </AuthContext.Provider>
   );
