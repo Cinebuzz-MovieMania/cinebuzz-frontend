@@ -33,9 +33,7 @@ function MovieDetailPanel({ movie, persons, onMovieUpdate }) {
     setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
-    API.post(`/movies/${movie.id}/poster`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
+    API.post(`/movies/${movie.id}/poster`, formData)
       .then((res) => { if (onMovieUpdate) onMovieUpdate(res.data.data); })
       .catch((err) => alert(err.response?.data?.message || "Upload failed"))
       .finally(() => setUploading(false));

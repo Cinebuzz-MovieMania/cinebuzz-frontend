@@ -94,9 +94,7 @@ function AdminPersons() {
     const formData = new FormData();
     formData.append("file", file);
     setUploading(true);
-    return API.post(`/persons/${personId}/profile-picture`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
+    return API.post(`/persons/${personId}/profile-picture`, formData)
       .then((res) => {
         const url = res.data.data?.profilePictureUrl;
         if (url) setProfilePreviewUrl(url);
